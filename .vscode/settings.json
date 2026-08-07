@@ -1,0 +1,5 @@
+{
+  "editor.formatOnSave": true,
+  "[c]": { "editor.defaultFormatter": "wasm-fmt.wasm-fmt" },
+  "[cpp]": { "editor.defaultFormatter": "wasm-fmt.wasm-fmt" }
+}
