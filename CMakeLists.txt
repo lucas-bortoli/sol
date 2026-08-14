@@ -17,9 +17,10 @@ target_compile_definitions(raylib PRIVATE
 
 add_executable(rocketship
     src/main.cpp
-    src/bdf.cpp
+    src/lib/font-parser/bdf.cpp
     src/window_manager.cpp
-    src/fonts.cpp
+    src/assets.cpp
+    src/lib/ui/Utils.cpp
 )
 
 target_link_libraries(rocketship PRIVATE raylib 
