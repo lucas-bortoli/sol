@@ -7,8 +7,6 @@
 #include "palette.h"
 #include "window_manager.h"
 
-namespace {
-
 /// Appends a new "<item text>  [x]" row to `itemList`, with the [x] button
 /// removing the whole row on click — demonstrates Container::AppendChild
 /// plus the self-removal pattern documented on Widget::Remove(): the
@@ -30,8 +28,6 @@ void AddTodoItem(ui::Container* itemList, const std::string& text) {
 
     removeButtonRef->SetOnActivate([rowRef] { rowRef->Remove(); });
 }
-
-}  // namespace
 
 int main() {
     InitWindow(640, 400, "Sol");
@@ -68,9 +64,7 @@ int main() {
             ui::Text("Todo List"),
             ui::Row(
                 {.gap = 4},
-                ui::Input("").Ref(newItemInput).Grow(1).OnActivate(
-                    addFromInput
-                ),  // Enter-to-add
+                ui::Input("").Ref(newItemInput).Grow(1),
                 ui::Btn("Add").OnActivate(addFromInput).Shrink(0)
             ),
             ui::Column({.gap = 4, .overflow = ui::Overflow::Scroll})
