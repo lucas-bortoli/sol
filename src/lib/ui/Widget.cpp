@@ -2,6 +2,14 @@
 
 namespace ui {
 
+namespace {
+Widget* g_focusedWidget = nullptr;
+}  // namespace
+
+Widget::~Widget() {
+    if (g_focusedWidget == this) g_focusedWidget = nullptr;
+}
+
 void Widget::Layout(const Rectangle& bounds) {
     computedRect = bounds;
     layoutDirty = false;
@@ -59,6 +67,11 @@ void Widget::PollPointerEvents(const Rectangle& rect) {
     }
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hovered) {
         pressOrigin = true;
+        if (focusable && g_focusedWidget != this) {
+            if (g_focusedWidget) g_focusedWidget->focused = false;
+            g_focusedWidget = this;
+            focused = true;
+        }
     }
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         if (hovered && pressOrigin && onClick) {

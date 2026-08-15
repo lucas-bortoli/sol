@@ -6,7 +6,9 @@
 
 namespace ui {
 
-Button::Button(std::string initialText) : text(std::move(initialText)) {}
+Button::Button(std::string initialText) : text(std::move(initialText)) {
+    focusable = true;
+}
 
 void Button::SetText(std::string newText) {
     text = std::move(newText);
@@ -51,6 +53,13 @@ void Button::Draw() const {
         ui::DrawText(
             text.c_str(), drawnRect.x + kPaddingX, drawnRect.y + kPaddingY,
             NEUTRAL_200
+        );
+    }
+
+    if (focused) {
+        DrawRectangleLines(
+            drawnRect.x - 2, drawnRect.y - 2, drawnRect.width + 4,
+            drawnRect.height + 4, BLUE_500
         );
     }
 }

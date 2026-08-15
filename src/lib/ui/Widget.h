@@ -14,7 +14,9 @@ class Container;
 /// about (and tested) without touching raylib.
 class Widget {
    public:
-    virtual ~Widget() = default;
+    /// Clears the global focus pointer if this widget currently holds it,
+    /// so a destroyed widget can never be read back as focused.
+    virtual ~Widget();
 
     /// Recomputes computedRect (and, for containers, every child's rect)
     /// for the space `bounds` given by the parent. Implementations should
@@ -69,6 +71,11 @@ class Widget {
     /// The rectangle computed by the most recent Layout() call.
     const Rectangle& GetComputedRect() const { return computedRect; }
 
+    /// Whether this widget currently holds the (single, app-wide) input
+    /// focus. Only widgets that opt in (see `focusable`) can ever become
+    /// focused; for everything else this is always false.
+    bool IsFocused() const { return focused; }
+
     friend class Container;
 
    protected:
@@ -90,6 +97,18 @@ class Widget {
     /// the last ProcessEvents() call. Draw() reads this instead of polling
     /// input itself, since Draw() is const.
     bool pointerDown = false;
+
+    /// Whether this widget type participates in focus at all. False for
+    /// every Widget by default; set true by a subclass's constructor (e.g.
+    /// Button) to opt in. Purely cosmetic for now — there is no keyboard
+    /// navigation, so this only gates whether a press can claim the global
+    /// focus pointer and whether IsFocused() can ever return true.
+    bool focusable = false;
+
+    /// Whether this widget currently holds the global focus pointer, kept
+    /// in sync by PollPointerEvents() so Draw() (const) can read it without
+    /// touching global state itself.
+    bool focused = false;
 
     /// Natural width when nothing constrains this widget, e.g. a label's
     /// measured text extent. Used as the flex-basis whenever fixedWidth

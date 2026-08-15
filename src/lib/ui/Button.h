@@ -10,7 +10,8 @@ namespace ui {
 
 /// A clickable rectangle with a text label and border/shadow chrome. Use
 /// SetOnClick()/SetOnHoverChange() (inherited from Widget) to react to
-/// input.
+/// input. Becomes the globally focused widget when pressed; Draw() renders
+/// a focus ring while focused.
 class Button : public Widget {
    public:
     explicit Button(std::string initialText);
