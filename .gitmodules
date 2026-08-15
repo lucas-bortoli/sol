@@ -1,6 +1,3 @@
 [submodule "external/raylib"]
-	path = external/raylib
-	url = https://github.com/raysan5/raylib.git
-[submodule "external/yoga"]
-	path = external/yoga
-	url = https://github.com/react/yoga.git
+path = external/raylib
+url = https://github.com/raysan5/raylib.git
