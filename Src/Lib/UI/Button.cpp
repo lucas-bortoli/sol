@@ -18,7 +18,7 @@ void Button::SetText(std::string newText) {
 float Button::IntrinsicWidth() const {
     return MeasureTextEx(
                Assets::cozette, text.c_str(), Assets::cozette.baseSize, 0
-    )
+           )
                .x +
            2 * kPaddingX;
 }
@@ -44,22 +44,29 @@ void Button::Draw() const {
         drawnRect.y += 1;
 
         UI::DrawRectWithBorderAndShadow(drawnRect, WHITE, NEUTRAL_600, 0);
-        UI::DrawText(
-            text.c_str(), drawnRect.x + kPaddingX, drawnRect.y + kPaddingY,
-            NEUTRAL_200
+        UI::DrawTextWithShadow(
+            text.c_str(),
+            drawnRect.x + kPaddingX,
+            drawnRect.y + kPaddingY,
+            NEUTRAL_600
         );
     } else {
         UI::DrawRectWithBorderAndShadow(drawnRect, WHITE, NEUTRAL_600, 1);
-        UI::DrawText(
-            text.c_str(), drawnRect.x + kPaddingX, drawnRect.y + kPaddingY,
-            NEUTRAL_200
+        UI::DrawTextWithShadow(
+            text.c_str(),
+            drawnRect.x + kPaddingX,
+            drawnRect.y + kPaddingY,
+            NEUTRAL_600
         );
     }
 
     if (focused) {
         DrawRectangleLines(
-            drawnRect.x - 2, drawnRect.y - 2, drawnRect.width + 4,
-            drawnRect.height + 4, BLUE_500
+            drawnRect.x - 2,
+            drawnRect.y - 2,
+            drawnRect.width + 4,
+            drawnRect.height + 4,
+            BLUE_500
         );
     }
 }

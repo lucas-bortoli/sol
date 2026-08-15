@@ -31,7 +31,7 @@ void AddTodoItem(UI::Container* itemList, const std::string& text) {
 
 int main() {
     InitWindow(640, 400, "Sol");
-    SetTargetFPS(60);
+    SetTargetFPS(30);
     HideCursor();
 
     Assets::Initialize();

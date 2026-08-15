@@ -4,6 +4,26 @@
 
 namespace UI {
 void DrawText(const char* text, int posX, int posY, Color color) {
+    DrawTextEx(
+        Assets::cozette,
+        text,
+        {(float)posX, (float)posY},
+        Assets::cozette.baseSize,
+        0,
+        color
+    );
+}
+void DrawText(const char* text, Vector2 position, Color color) {
+    DrawText(text, position.x, position.y, color);
+}
+
+void DrawTextWithShadow(
+    const char* text,
+    int posX,
+    int posY,
+    Color color,
+    Color shadowColor = NEUTRAL_300
+) {
     // shadow
     DrawTextEx(
         Assets::cozette,
@@ -11,7 +31,7 @@ void DrawText(const char* text, int posX, int posY, Color color) {
         {(float)posX + 0, (float)posY + 1},
         Assets::cozette.baseSize,
         0,
-        NEUTRAL_800
+        shadowColor
     );
     DrawTextEx(
         Assets::cozette,
@@ -19,7 +39,7 @@ void DrawText(const char* text, int posX, int posY, Color color) {
         {(float)posX + 1, (float)posY + 0},
         Assets::cozette.baseSize,
         0,
-        NEUTRAL_800
+        shadowColor
     );
     DrawTextEx(
         Assets::cozette,
@@ -27,21 +47,26 @@ void DrawText(const char* text, int posX, int posY, Color color) {
         {(float)posX + 1, (float)posY + 1},
         Assets::cozette.baseSize,
         0,
-        NEUTRAL_800
+        shadowColor
     );
 
-    // actual text
+    // text
     DrawTextEx(
         Assets::cozette,
         text,
         {(float)posX, (float)posY},
         Assets::cozette.baseSize,
         0,
-        NEUTRAL_200
+        color
     );
 }
-void DrawText(const char* text, Vector2 position, Color color) {
-    DrawText(text, position.x, position.y, color);
+void DrawTextWithShadow(
+    const char* text,
+    Vector2 position,
+    Color color,
+    Color shadowColor = NEUTRAL_300
+) {
+    DrawTextWithShadow(text, position.x, position.y, color, shadowColor);
 }
 
 void DrawRectWithBorderAndShadow(
@@ -57,7 +82,7 @@ void DrawRectWithBorderAndShadow(
             rectangle.y + i,
             rectangle.width,
             rectangle.height,
-            NEUTRAL_600
+            NEUTRAL_300
         );
     }
 

@@ -20,9 +20,7 @@ float Label::IntrinsicWidth() const {
         .x;
 }
 
-float Label::IntrinsicHeight() const {
-    return Assets::cozette.baseSize;
-}
+float Label::IntrinsicHeight() const { return Assets::cozette.baseSize; }
 
 void Label::Layout(const Rectangle& bounds) {
     computedRect = bounds;
@@ -30,7 +28,9 @@ void Label::Layout(const Rectangle& bounds) {
 }
 
 void Label::Draw() const {
-    UI::DrawText(text.c_str(), computedRect.x, computedRect.y, NEUTRAL_200);
+    UI::DrawTextWithShadow(
+        text.c_str(), computedRect.x, computedRect.y, NEUTRAL_600
+    );
 }
 
 }  // namespace UI

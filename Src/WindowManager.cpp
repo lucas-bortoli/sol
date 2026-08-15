@@ -80,10 +80,10 @@ Rectangle ComputeClientRect(const Window& window) {
     // Content-inset geometry: breathing room around the 1px border + 16px
     // titlebar that Draw() paints , matched to what call sites used to
     // hand-type per window before WindowGetClientRect() existed.
-    constexpr float kContentInsetLeft = 0.0f;
-    constexpr float kContentInsetRight = 0.0f;
-    constexpr float kContentInsetTop = 18.0f;
-    constexpr float kContentInsetBottom = 0.0f;
+    constexpr float kContentInsetLeft = 1.0f;    // 1px border
+    constexpr float kContentInsetRight = 1.0f;   // 1px border
+    constexpr float kContentInsetTop = 19.0f;    // 18px height + 1px border
+    constexpr float kContentInsetBottom = 1.0f;  // 1px border
 
     return {
         window.clientRect.x + kContentInsetLeft,
@@ -144,28 +144,24 @@ void Draw() {
             window.clientRect.x + 1,
             window.clientRect.y + 1,
             window.clientRect.width - 2,
-            16
+            18
         };
 
-        if (CheckCollisionPointRec(mousePos, titlebar)) {
-            DrawRectangle(
-                titlebar.x,
-                titlebar.y,
-                titlebar.width,
-                titlebar.height,
-                NEUTRAL_400
-            );
-        } else {
-            DrawRectangle(
-                titlebar.x, titlebar.y, titlebar.width, titlebar.height, RED_400
-            );
-        }
+        DrawRectangleGradientH(
+            titlebar.x,
+            titlebar.y,
+            titlebar.width,
+            titlebar.height,
+            ORANGE_600,
+            ORANGE_800
+        );
 
-        UI::DrawText(
+        UI::DrawTextWithShadow(
             window.title.c_str(),
-            window.clientRect.x + 3,
-            window.clientRect.y + 3,
-            NEUTRAL_200
+            window.clientRect.x + 4,
+            window.clientRect.y + 4,
+            NEUTRAL_200,
+            NEUTRAL_500
         );
 
         Rectangle closeButtonRect = {
@@ -174,6 +170,7 @@ void Draw() {
             16,
             14
         };
+
         // titlebar X
         DrawRectangle(
             closeButtonRect.x,
