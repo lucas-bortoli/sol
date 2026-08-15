@@ -65,6 +65,28 @@ Widget& Widget::SetOnHoverChange(std::function<void(bool)> callback) {
     return *this;
 }
 
+Widget& Widget::SetOnKeyPress(std::function<void(int)> callback) {
+    onKeyPress = std::move(callback);
+    return *this;
+}
+
+Widget& Widget::SetOnKeyDown(std::function<void(int)> callback) {
+    onKeyDown = std::move(callback);
+    return *this;
+}
+
+Widget& Widget::SetOnKeyUp(std::function<void(int)> callback) {
+    onKeyUp = std::move(callback);
+    return *this;
+}
+
+void Widget::ReleaseAllKeys() {
+    for (int key : heldKeys) {
+        if (onKeyUp) onKeyUp(key);
+    }
+    heldKeys.clear();
+}
+
 void Widget::PollPointerEvents(const Rectangle& rect) {
     Vector2 mouse = GetMousePosition();
     bool hovered = CheckCollisionPointRec(mouse, rect);
@@ -78,6 +100,7 @@ void Widget::PollPointerEvents(const Rectangle& rect) {
             if (g_focusedWidget) {
                 g_focusedWidget->focused = false;
                 g_focusedWidget->keyDown = false;
+                g_focusedWidget->ReleaseAllKeys();
             }
             g_focusedWidget = this;
             focused = true;
@@ -122,6 +145,7 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
             if (g_focusedWidget) {
                 g_focusedWidget->focused = false;
                 g_focusedWidget->keyDown = false;
+                g_focusedWidget->ReleaseAllKeys();
             }
             g_focusedWidget = focusableWidgets[nextIndex];
             g_focusedWidget->focused = true;
@@ -135,6 +159,41 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
     if ((IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) &&
         g_focusedWidget) {
         if (g_focusedWidget->onActivate) g_focusedWidget->onActivate();
+    }
+
+    // Raw key press/down/up bookkeeping for the focused widget. Drains
+    // GetKeyPressed()'s frame-scoped queue exactly once (same reasoning as
+    // KEY_TAB above — must happen from this single per-frame call, not from
+    // per-widget ProcessEvents()), then walks the widget's own heldKeys to
+    // fire onKeyDown every frame a key stays held and onKeyUp the frame it's
+    // released.
+    if (g_focusedWidget) {
+        Widget& focusedWidget = *g_focusedWidget;
+        int key;
+        while ((key = GetKeyPressed()) != 0) {
+            if (std::find(
+                    focusedWidget.heldKeys.begin(),
+                    focusedWidget.heldKeys.end(),
+                    key
+                ) == focusedWidget.heldKeys.end()) {
+                focusedWidget.heldKeys.push_back(key);
+            }
+            if (focusedWidget.onKeyPress) focusedWidget.onKeyPress(key);
+        }
+
+        for (size_t i = 0; i < focusedWidget.heldKeys.size();) {
+            int heldKey = focusedWidget.heldKeys[i];
+            if (IsKeyUp(heldKey)) {
+                if (focusedWidget.onKeyUp) focusedWidget.onKeyUp(heldKey);
+                focusedWidget.heldKeys.erase(
+                    focusedWidget.heldKeys.begin() +
+                    static_cast<std::ptrdiff_t>(i)
+                );
+            } else {
+                if (focusedWidget.onKeyDown) focusedWidget.onKeyDown(heldKey);
+                i++;
+            }
+        }
     }
 }
 

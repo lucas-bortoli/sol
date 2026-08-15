@@ -78,6 +78,26 @@ class Widget {
     /// transitions.
     Widget& SetOnHoverChange(std::function<void(bool)> callback);
 
+    /// Registers a callback fired once on the frame a key is first pressed
+    /// while this widget is focused, with the raylib KeyboardKey code.
+    /// Independent of onActivate/onClick — a focused TextBox, for example,
+    /// sees every key it's sent (including Enter/Space) here regardless of
+    /// whether onActivate is also set. Only ever fires for the single
+    /// currently-focused widget.
+    Widget& SetOnKeyPress(std::function<void(int)> callback);
+
+    /// Registers a callback fired every frame a key is held down while this
+    /// widget is focused (including the frame it was first pressed, after
+    /// onKeyPress). Stops firing the frame the key is released or focus
+    /// moves away.
+    Widget& SetOnKeyDown(std::function<void(int)> callback);
+
+    /// Registers a callback fired once on the frame a previously-held key is
+    /// released while this widget is focused, or once for each key still
+    /// held if focus moves away from this widget first (so a consumer never
+    /// sees a "stuck" key with no matching release).
+    Widget& SetOnKeyUp(std::function<void(int)> callback);
+
     /// The rectangle computed by the most recent Layout() call.
     const Rectangle& GetComputedRect() const { return computedRect; }
 
@@ -109,8 +129,18 @@ class Widget {
     std::function<void()> onClick;
     std::function<void()> onActivate;
     std::function<void(bool)> onHoverChange;
+    std::function<void(int)> onKeyPress;
+    std::function<void(int)> onKeyDown;
+    std::function<void(int)> onKeyUp;
     bool wasHovered = false;
     bool pressOrigin = false;
+
+    /// Keys currently tracked as held for this widget (only ever populated
+    /// on the focused widget) — drives onKeyDown/onKeyUp bookkeeping in
+    /// ProcessKeyboardFocus(). Not the same as raylib's own key state; this
+    /// is just "which keys has this widget seen a press for that it hasn't
+    /// yet seen a matching release for."
+    std::vector<int> heldKeys;
 
     /// Whether the pointer is currently down and inside computedRect, as of
     /// the last ProcessEvents() call. Draw() reads this instead of polling
@@ -153,6 +183,12 @@ class Widget {
     /// depth-first tree order — the order Tab/Shift+Tab cycle through.
     /// Called on demand only when Tab is actually pressed, not every frame.
     virtual void CollectFocusable(std::vector<Widget*>& out);
+
+   private:
+    /// Fires onKeyUp for every still-held key and clears heldKeys. Called
+    /// whenever focus moves away from this widget, so a consumer never sees
+    /// a key reported as pressed with no matching release.
+    void ReleaseAllKeys();
 };
 
 }  // namespace ui

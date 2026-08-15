@@ -85,6 +85,21 @@ class Node {
         widget->SetOnHoverChange(std::move(callback));
         return *this;
     }
+    /// Registers a key-press callback. See Widget::SetOnKeyPress.
+    Node& OnKeyPress(std::function<void(int)> callback) {
+        widget->SetOnKeyPress(std::move(callback));
+        return *this;
+    }
+    /// Registers a key-down callback. See Widget::SetOnKeyDown.
+    Node& OnKeyDown(std::function<void(int)> callback) {
+        widget->SetOnKeyDown(std::move(callback));
+        return *this;
+    }
+    /// Registers a key-up callback. See Widget::SetOnKeyUp.
+    Node& OnKeyUp(std::function<void(int)> callback) {
+        widget->SetOnKeyUp(std::move(callback));
+        return *this;
+    }
 
     operator std::unique_ptr<Widget>() { return std::move(widget); }
 
