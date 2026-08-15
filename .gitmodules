@@ -1,6 +1,6 @@
-[submodule "external/raylib"]
-path = external/raylib
+[submodule "Vendor/raylib"]
+	path = Vendor/raylib
 url = https://github.com/raysan5/raylib.git
-[submodule "external/doctest"]
-	path = external/doctest
+[submodule "Vendor/doctest"]
+	path = Vendor/doctest
 	url = https://github.com/doctest/doctest.git

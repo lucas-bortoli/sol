@@ -20,7 +20,7 @@ just clean
 
 Two subsystems, connected but independently understandable:
 
-- **`ui::`** (`src/lib/ui/`) is a retained-mode widget toolkit: build a
+- **`UI::`** (`Src/Lib/UI/`) is a retained-mode widget toolkit: build a
   `Widget` tree once — via `Tree.h`'s declarative `Row()`/`Column()`/
   `Text()`/`Btn()`/... literals, not by constructing widget classes
   directly — then drive it every frame through three passes, in order:
@@ -28,21 +28,26 @@ Two subsystems, connected but independently understandable:
   callbacks), `Draw()` (paint). `Container` is the only layout-bearing
   widget, a CSS-flexbox-like engine (direction/justify/align/gap/padding/
   grow/shrink/`Overflow::Scroll`); every other widget just reports an
-  intrinsic size and paints itself. Full guide: `docs/ui.md`.
+  intrinsic size and paints itself. Full guide: `Documentation/UI.md`.
 
-- **`wm::`** (`src/window_manager.h`/`.cpp`) is the window manager. It
-  owns and drives each window's `ui::` content: `WindowSetContent(handle,
-  tree)` hands over a widget tree, and `wm::internal::ProcessEvents()`/
+- **`WM::`** (`Src/WindowManager.h`/`.cpp`) is the window manager. It
+  owns and drives each window's `UI::` content: `WindowSetContent(handle,
+  tree)` hands over a widget tree, and `WM::internal::ProcessEvents()`/
   `Draw()` call that tree's `ProcessEvents`/`ProcessKeyboardFocus`/
   `Layout`/`Draw` every frame — callers never touch a window's widget
-  tree directly after handing it over. Full guide: `docs/WindowManager.md`.
+  tree directly after handing it over. Full guide: `Documentation/WindowManager.md`.
 
 - All raylib reads of live input state (mouse, keyboard, clipboard,
-  clock) go through `ui::CurrentInput()` (`src/lib/ui/Input.h`/`.cpp`)
+  clock) go through `UI::CurrentInput()` (`Src/Lib/UI/Input.h`/`.cpp`)
   rather than calling raylib directly. This is the seam the test suite
-  (`tests/`) uses to drive the toolkit with a scripted `FakeInput`
-  instead of a real window. Full guide: `docs/testing.md`.
+  (`Tests/`) uses to drive the toolkit with a scripted `FakeInput`
+  instead of a real window. Full guide: `Documentation/Testing.md`.
 
-- `assets.h`/`.cpp` and `palette.h` hold global font/texture/color state,
-  loaded once at startup (`assets::Initialize()`) and freed at shutdown
-  (`assets::Cleanup()`) — not owned by any individual widget.
+- `Assets.h`/`.cpp` and `Palette.h` hold global font/texture/color state,
+  loaded once at startup (`Assets::Initialize()`) and freed at shutdown
+  (`Assets::Cleanup()`) — not owned by any individual widget.
+
+## Naming convention
+
+PascalCase identifiers, namespaces, filenames, and directories throughout —
+see `Documentation/NamingConvention.md` for the full rationale.

@@ -10,7 +10,7 @@ top of [raylib](https://www.raylib.com/).
   reserved gutter, and a small set of widgets (labels, buttons, text
   boxes, text areas, spacers), all built through a declarative
   tree-literal DSL rather than constructed directly — see the
-  [UI toolkit guide](docs/ui.md) for the full walkthrough.
+  [UI toolkit guide](Documentation/UI.md) for the full walkthrough.
 - **A DOM-like mutation API** for adding, inserting, removing, and
   querying children at runtime, safe to call even from a widget's own
   callback (e.g. a row's own "remove" button tearing itself down).
@@ -53,9 +53,9 @@ just sanitize # whole suite under ASan + LeakSanitizer
 
 ## Documentation
 
-- [UI toolkit guide](docs/ui.md) — building UIs, the layout system,
+- [UI toolkit guide](Documentation/UI.md) — building UIs, the layout system,
   dynamic mutation, writing a new widget.
-- [Window manager guide](docs/WindowManager.md) — window chrome and its
+- [Window manager guide](Documentation/WindowManager.md) — window chrome and its
   integration with the UI toolkit.
-- [Testing guide](docs/testing.md) — running the test suite, how input
+- [Testing guide](Documentation/Testing.md) — running the test suite, how input
   simulation works, and how to add coverage.
