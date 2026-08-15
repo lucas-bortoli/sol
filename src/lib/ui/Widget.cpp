@@ -1,6 +1,7 @@
 #include "Widget.h"
 
 #include "Container.h"
+#include "Input.h"
 
 #include <algorithm>
 #include <cmath>
@@ -12,17 +13,17 @@ Widget* g_focusedWidget = nullptr;
 }  // namespace
 
 bool IsKeyRepeated(int key, float& heldSeconds, float delay, float interval) {
-    if (IsKeyPressed(key)) {
+    if (CurrentInput().IsKeyPressed(key)) {
         heldSeconds = 0.0f;
         return true;
     }
-    if (!IsKeyDown(key)) {
+    if (!CurrentInput().IsKeyDown(key)) {
         heldSeconds = 0.0f;
         return false;
     }
 
     float previous = heldSeconds;
-    heldSeconds += GetFrameTime();
+    heldSeconds += CurrentInput().GetFrameTime();
     if (previous < delay) {
         return heldSeconds >= delay;
     }
@@ -120,12 +121,12 @@ void Widget::ReleaseAllKeys() {
 }
 
 void Widget::PollPointerEvents(const Rectangle& rect) {
-    Vector2 mouse = GetMousePosition();
+    Vector2 mouse = CurrentInput().GetMousePosition();
     bool hovered = CheckCollisionPointRec(mouse, rect);
     bool hoverChanged = hovered != wasHovered;
     wasHovered = hovered;
 
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hovered) {
+    if (CurrentInput().IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hovered) {
         pressOrigin = true;
         if (focusable && g_focusedWidget != this) {
             if (g_focusedWidget) {
@@ -139,12 +140,12 @@ void Widget::PollPointerEvents(const Rectangle& rect) {
     }
 
     bool firesClick = false;
-    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+    if (CurrentInput().IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
         firesClick = hovered && pressOrigin;
         pressOrigin = false;
     }
 
-    pointerDown = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+    pointerDown = hovered && CurrentInput().IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 
     // Everything above this point is done touching `this`. Copy out
     // whichever callbacks are about to fire before calling any of them:
@@ -174,7 +175,7 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
     static float tabHeldSeconds = 0.0f;
     static double lastFrameTime = -1.0;
     static bool tabRepeatedThisFrame = false;
-    double now = GetTime();
+    double now = CurrentInput().GetTime();
     bool newFrame = now != lastFrameTime;
     if (newFrame) {
         lastFrameTime = now;
@@ -197,8 +198,8 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
         bool nothingFocusedAnywhere = g_focusedWidget == nullptr;
         if (!focusableWidgets.empty() &&
             (ownsFocus || nothingFocusedAnywhere)) {
-            bool backward =
-                IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+            bool backward = CurrentInput().IsKeyDown(KEY_LEFT_SHIFT) ||
+                             CurrentInput().IsKeyDown(KEY_RIGHT_SHIFT);
             size_t n = focusableWidgets.size();
             size_t nextIndex;
             if (it == focusableWidgets.end()) {
@@ -225,10 +226,12 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
     if (!newFrame) return;
 
     if (g_focusedWidget) {
-        g_focusedWidget->keyDown = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_SPACE);
+        g_focusedWidget->keyDown = CurrentInput().IsKeyDown(KEY_ENTER) ||
+                                    CurrentInput().IsKeyDown(KEY_SPACE);
     }
 
-    if ((IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) &&
+    if ((CurrentInput().IsKeyPressed(KEY_ENTER) ||
+         CurrentInput().IsKeyPressed(KEY_SPACE)) &&
         g_focusedWidget) {
         // Copy the callback out before calling it — onActivate may call
         // Widget::Remove() on the focused widget (or an ancestor of it),
@@ -251,7 +254,7 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
         std::shared_ptr<bool> focusedAlive = focusedWidget->aliveToken;
 
         int key;
-        while ((key = GetKeyPressed()) != 0) {
+        while ((key = CurrentInput().GetKeyPressed()) != 0) {
             if (!*focusedAlive) continue;
             if (std::find(
                     focusedWidget->heldKeys.begin(),
@@ -265,7 +268,7 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
 
         for (size_t i = 0; *focusedAlive && i < focusedWidget->heldKeys.size();) {
             int heldKey = focusedWidget->heldKeys[i];
-            if (IsKeyUp(heldKey)) {
+            if (CurrentInput().IsKeyUp(heldKey)) {
                 auto onKeyUp = focusedWidget->onKeyUp;
                 if (onKeyUp) onKeyUp(heldKey);
                 if (!*focusedAlive) break;

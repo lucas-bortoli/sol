@@ -1,6 +1,7 @@
 #include "Container.h"
 
 #include "../../palette.h"
+#include "Input.h"
 
 #include <algorithm>
 
@@ -332,11 +333,11 @@ void Container::ProcessEvents() {
 
     if (IsOverflowing()) {
         const bool horizontal = IsHorizontal(direction);
-        Vector2 mouse = GetMousePosition();
+        Vector2 mouse = CurrentInput().GetMousePosition();
         float mouseMain = horizontal ? mouse.x : mouse.y;
 
         if (draggingThumb) {
-            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            if (CurrentInput().IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
                 ThumbMetrics m = ComputeThumbMetrics();
                 float freeTrack = m.trackLen - m.thumbLen;
                 float scale =
@@ -353,13 +354,13 @@ void Container::ProcessEvents() {
             } else {
                 draggingThumb = false;
             }
-        } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        } else if (CurrentInput().IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
                    CheckCollisionPointRec(mouse, ThumbRect())) {
             draggingThumb = true;
             dragStartMouseMain = mouseMain;
             dragStartScrollOffsetPx = scrollOffsetPx;
         } else if (CheckCollisionPointRec(mouse, computedRect)) {
-            float wheel = GetMouseWheelMove();
+            float wheel = CurrentInput().GetMouseWheelMove();
             if (wheel != 0.0f) {
                 ThumbMetrics m = ComputeThumbMetrics();
                 float newOffset = std::clamp(

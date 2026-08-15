@@ -4,6 +4,7 @@
 
 #include "../../assets.h"
 #include "../../palette.h"
+#include "Input.h"
 #include "Utf8.h"
 #include "Utils.h"
 
@@ -103,11 +104,11 @@ void TextBox::CopySelectionToClipboard() const {
     if (!HasSelection()) return;
     ByteRange range = SelectionRange();
     std::string selected = text.substr(range.start, range.end - range.start);
-    SetClipboardText(selected.c_str());
+    CurrentInput().SetClipboardText(selected.c_str());
 }
 
 void TextBox::PasteFromClipboard() {
-    const char* clipboard = GetClipboardText();
+    const char* clipboard = CurrentInput().GetClipboardText();
     if (!clipboard) return;
     // TextBox must stay single-line, so any newline in the pasted text
     // becomes a space rather than actually breaking the line.
@@ -139,14 +140,16 @@ void TextBox::ProcessEvents() {
     // degrades gracefully for a point outside the box. isDraggingSelection
     // is deliberately independent of Widget's own pressOrigin/pointerDown
     // (those drive focus-claiming and the pressed visual, not selection).
-    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
-        CheckCollisionPointRec(GetMousePosition(), GetComputedRect())) {
-        PlaceCaretAtMouse(GetMousePosition());
+    if (CurrentInput().IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        CheckCollisionPointRec(
+            CurrentInput().GetMousePosition(), GetComputedRect()
+        )) {
+        PlaceCaretAtMouse(CurrentInput().GetMousePosition());
 
         // Double/triple-click detection: a press at the same character as
         // the previous one, within kMultiClickIntervalSeconds, continues
         // the sequence instead of starting a fresh single click.
-        double now = GetTime();
+        double now = CurrentInput().GetTime();
         if (clickCount > 0 &&
             now - lastClickTime <= kMultiClickIntervalSeconds &&
             caretByteIndex == lastClickByteIndex) {
@@ -175,8 +178,8 @@ void TextBox::ProcessEvents() {
         isDraggingSelection = true;
     }
     if (isDraggingSelection) {
-        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
-            PlaceCaretAtMouse(GetMousePosition());
+        if (CurrentInput().IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            PlaceCaretAtMouse(CurrentInput().GetMousePosition());
             if (activeSelectUnit == 2) {
                 // Word-wise drag: extend outward from whichever edge of
                 // the originally-clicked word is on the far side of the
@@ -205,7 +208,7 @@ void TextBox::ProcessEvents() {
     // actually has focus.
     if (!focused) return;
 
-    blinkTimer += GetFrameTime();
+    blinkTimer += CurrentInput().GetFrameTime();
 
     // GetCharPressed() is a frame-scoped queue of already-decoded Unicode
     // codepoints (raylib/GLFW does the keyboard-layout-aware decoding for
@@ -217,15 +220,17 @@ void TextBox::ProcessEvents() {
     // first iteration actually needs to delete it, since DeleteSelection()
     // clears HasSelection() for the rest of the loop.
     int codepoint;
-    while ((codepoint = GetCharPressed()) != 0) {
+    while ((codepoint = CurrentInput().GetCharPressed()) != 0) {
         if (HasSelection()) DeleteSelection();
         int byteCount = 0;
         const char* utf8 = CodepointToUTF8(codepoint, &byteCount);
         InsertCodepoint(utf8, byteCount);
     }
 
-    bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-    bool ctrlHeld = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+    bool shiftHeld = CurrentInput().IsKeyDown(KEY_LEFT_SHIFT) ||
+                      CurrentInput().IsKeyDown(KEY_RIGHT_SHIFT);
+    bool ctrlHeld = CurrentInput().IsKeyDown(KEY_LEFT_CONTROL) ||
+                     CurrentInput().IsKeyDown(KEY_RIGHT_CONTROL);
 
     // Each of these uses IsKeyRepeated rather than IsKeyPressed, so holding
     // the key down repeats the action after a short delay (see Widget.h)
@@ -280,17 +285,17 @@ void TextBox::ProcessEvents() {
 
     // Clipboard: one-shot (IsKeyPressed, not IsKeyRepeated) since holding
     // Ctrl+C/X/V/A shouldn't repeat the action every frame.
-    if (ctrlHeld && IsKeyPressed(KEY_A)) {
+    if (ctrlHeld && CurrentInput().IsKeyPressed(KEY_A)) {
         selectionAnchor = 0;
         caretByteIndex = text.size();
         blinkTimer = 0.0f;
     }
-    if (ctrlHeld && IsKeyPressed(KEY_C)) CopySelectionToClipboard();
-    if (ctrlHeld && IsKeyPressed(KEY_X)) {
+    if (ctrlHeld && CurrentInput().IsKeyPressed(KEY_C)) CopySelectionToClipboard();
+    if (ctrlHeld && CurrentInput().IsKeyPressed(KEY_X)) {
         CopySelectionToClipboard();
         DeleteSelection();
     }
-    if (ctrlHeld && IsKeyPressed(KEY_V)) PasteFromClipboard();
+    if (ctrlHeld && CurrentInput().IsKeyPressed(KEY_V)) PasteFromClipboard();
 }
 
 void TextBox::ScrollToKeepCaretVisible() const {

@@ -20,6 +20,7 @@ add_executable(rocketship
     src/window_manager.cpp
     src/assets.cpp
     src/lib/ui/Utils.cpp
+    src/lib/ui/Input.cpp
     src/lib/ui/Widget.cpp
     src/lib/ui/Container.cpp
     src/lib/ui/Label.cpp
