@@ -1,6 +1,6 @@
 # Testing the `ui::` toolkit
 
-An automated test suite (`rocketship_tests`, using [doctest](https://github.com/doctest/doctest),
+An automated test suite (`sol_tests`, using [doctest](https://github.com/doctest/doctest),
 vendored as a submodule at `external/doctest`) that drives the widget
 toolkit programmatically, without a real window — including simulated
 clicks, drags, and keyboard focus — plus a way to run the whole suite
@@ -11,19 +11,19 @@ under AddressSanitizer + LeakSanitizer.
 ## Running the tests
 
 ```sh
-cmake --build build --target rocketship_tests
-ctest --test-dir build            # or: ./build/rocketship_tests directly
+cmake --build build --target sol_tests
+ctest --test-dir build            # or: ./build/sol_tests directly
 ```
 
-The `rocketship` app target is untouched by any of this — see "Why this
+The `sol` app target is untouched by any of this — see "Why this
 doesn't change runtime behavior" below.
 
 ### Leak checking
 
 ```sh
-cmake -B build-sanitize -DROCKETSHIP_SANITIZE=ON
-cmake --build build-sanitize --target rocketship_tests
-./build-sanitize/rocketship_tests
+cmake -B build-sanitize -DSOL_SANITIZE=ON
+cmake --build build-sanitize --target sol_tests
+./build-sanitize/sol_tests
 ```
 
 Same test suite, compiled with `-fsanitize=address,leak`. LeakSanitizer
@@ -43,7 +43,7 @@ keyboard, wheel, clipboard, the clock — is routed through `ui::InputSource`
 CurrentInput()` is what all widget code actually calls; it defaults to a
 `RaylibInputSource` that forwards 1:1 to real raylib, so this is a
 behavior-preserving seam for the real app — swapping every call site over
-to `CurrentInput()` didn't change what `rocketship` does at runtime.
+to `CurrentInput()` didn't change what `sol` does at runtime.
 (`CheckCollisionPointRec` is the one exception: it's pure geometry on
 already-passed-in values, not a read of hidden global state, so every
 call site still calls raylib's version directly.)

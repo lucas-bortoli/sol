@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(rocketship LANGUAGES CXX)
+project(sol LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -14,7 +14,7 @@ target_compile_definitions(raylib PRIVATE
 )
 
 
-add_executable(rocketship
+add_executable(sol
     src/main.cpp
     src/lib/font-parser/bdf.cpp
     src/window_manager.cpp
@@ -31,11 +31,11 @@ add_executable(rocketship
     src/lib/ui/TextArea.cpp
 )
 
-target_link_libraries(rocketship PRIVATE raylib)
+target_link_libraries(sol PRIVATE raylib)
 
-option(ROCKETSHIP_SANITIZE "Build rocketship_tests with ASan+LeakSanitizer" OFF)
+option(SOL_SANITIZE "Build sol_tests with ASan+LeakSanitizer" OFF)
 
-add_executable(rocketship_tests
+add_executable(sol_tests
     tests/main.cpp
     tests/FakeInput.cpp
     tests/test_container.cpp
@@ -53,12 +53,12 @@ add_executable(rocketship_tests
     src/lib/ui/Utf8.cpp
     src/lib/ui/TextArea.cpp
 )
-target_include_directories(rocketship_tests PRIVATE external/doctest/doctest)
-target_link_libraries(rocketship_tests PRIVATE raylib)
-if(ROCKETSHIP_SANITIZE)
-    target_compile_options(rocketship_tests PRIVATE -fsanitize=address,leak -g)
-    target_link_options(rocketship_tests PRIVATE -fsanitize=address,leak)
+target_include_directories(sol_tests PRIVATE external/doctest/doctest)
+target_link_libraries(sol_tests PRIVATE raylib)
+if(SOL_SANITIZE)
+    target_compile_options(sol_tests PRIVATE -fsanitize=address,leak -g)
+    target_link_options(sol_tests PRIVATE -fsanitize=address,leak)
 endif()
 
 enable_testing()
-add_test(NAME ui_tests COMMAND rocketship_tests)
+add_test(NAME ui_tests COMMAND sol_tests)

@@ -34,7 +34,7 @@ void AddTodoItem(ui::Container* itemList, const std::string& text) {
 }  // namespace
 
 int main() {
-    InitWindow(640, 400, "Geminata OS");
+    InitWindow(640, 400, "Sol");
     SetTargetFPS(60);
     HideCursor();
 

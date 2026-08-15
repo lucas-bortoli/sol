@@ -327,7 +327,7 @@ Follow the existing widgets as templates (`Label` is the simplest). The
 pattern:
 
 1. `.h`/`.cpp` pair in `src/lib/ui/`, add both to `CMakeLists.txt`'s
-   `add_executable(rocketship ...)` source list, and include the header
+   `add_executable(sol ...)` source list, and include the header
    from `UI.h`.
 2. Derive from `Widget`; override `Draw() const` (pure virtual — every
    widget must paint itself). Override `Layout()`/`ProcessEvents()` only
