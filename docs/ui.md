@@ -86,6 +86,25 @@ so the next `Layout()` call actually recomputes. You don't need to call it
 yourself unless you're writing a new widget (see "Writing a new widget"
 below).
 
+### 4. Mutate the tree at runtime
+
+Trees aren't static once built — a `Container` supports inserting,
+removing, and querying children after construction, and any `Widget` can
+detach itself from wherever it lives:
+
+```cpp
+ui::Button* dismissButton = nullptr;
+parentColumn->AppendChild(
+    ui::Btn("Dismiss").OnActivate([&dismissButton] {
+        dismissButton->Remove();  // detaches and destroys itself
+    }).Ref(dismissButton)
+);
+```
+
+See "Dynamic children" under the `Container` reference below for the full
+`InsertChild`/`RemoveChild`/query surface, and the note on `Widget::Remove()`
+for why it's safe to call even from the widget's own callback.
+
 ---
 
 ## Core concepts
@@ -229,13 +248,45 @@ ui::Column(
   `ProcessEvents()` polls the outer widget before recursing into children,
   an outer scrollable currently claims wheel events over an inner one.
 
+### Dynamic children
+
+Beyond the tree-literal children passed at construction, `Container`
+supports runtime mutation, DOM-`Node`-style:
+
+| Method | DOM equivalent | Notes |
+|---|---|---|
+| `AppendChild(child)` | `appendChild` | Adds at the end. |
+| `InsertChild(index, child)` | `insertBefore` (roughly) | Inserts at `index`, clamped to the current child count (so an out-of-range index behaves like `AppendChild`). |
+| `RemoveChild(child)` | `removeChild` | Detaches `child` (a raw `Widget*`) and returns ownership as a `std::unique_ptr<Widget>`, or `nullptr` if it isn't actually a child of this container. Doesn't throw on a not-found child — safe to call speculatively. |
+| `ChildCount()` | `childElementCount` | |
+| `ChildAt(index)` | `children[index]` | Throws `std::out_of_range` if `index` is out of bounds (`std::vector::at` convention). |
+| `IndexOf(child)` | — | Returns `std::optional<size_t>`, `nullopt` if `child` isn't a direct child. |
+| `Children()` | `children` | Returns a fresh `std::vector<Widget*>` snapshot each call — fine on demand, not meant to be polled every frame. |
+
+Every `Widget` (not just `Container`) also has:
+
+- **`GetParent()`** → `Container*` (or `nullptr` for a tree root) — DOM
+  `Node.parentNode`. Typed as `Container*` rather than the more generic
+  `Widget*` because `Container` is the only widget that ever has children.
+- **`Remove()`** → `std::unique_ptr<Widget>` — DOM `Node.remove()`, adapted
+  for C++'s explicit ownership: it detaches the widget from its parent
+  and hands you back the same object as a `unique_ptr`. Keep it to
+  reattach elsewhere (`someOtherContainer->AppendChild(widget->Remove())`),
+  or discard the return value to destroy it on the spot
+  (`widget->Remove();`). **Safe to call from the widget's own
+  `onClick`/`onActivate`/`onHoverChange`/`onKeyUp` callback** — a
+  self-removing button is expected usage, and `PollPointerEvents`/
+  `ReleaseAllKeys` (`Widget.cpp`) are deliberately written to copy out
+  whatever they need before firing any callback, so nothing touches the
+  widget again if that callback destroys it.
+
 ---
 
 ## Widget reference
 
 | Widget | Factory | Purpose |
 |---|---|---|
-| `Container` | `Row(props, ...)` / `Column(props, ...)` | Flexbox layout — see above. Never constructed directly. |
+| `Container` | `Row(props, ...)` / `Column(props, ...)` | Flexbox layout — see above. Never constructed directly. Supports runtime child mutation (`AppendChild`/`InsertChild`/`RemoveChild`/queries) — see "Dynamic children" above. |
 | `Label` | `Text(str)` | Static single-line text, sized to content. `SetText()` to change it. |
 | `Button` | `Btn(str)` | Clickable rect with text + border/shadow chrome. Focusable; shows a focus ring. Use `OnActivate()` for its primary action (fires on click *and* keyboard Enter/Space). |
 | `TextBox` | `Input(initial = "")` | Single-line UTF-8 text input: click/Tab focus, click-to-place-caret, click-drag/double/triple-click select, Ctrl+A/C/X/V, horizontal auto-scroll. No wrapping. |
@@ -246,7 +297,7 @@ All of the above derive from `Widget` (`Widget.h`) and inherit its common
 surface: `SetWidth`/`SetHeight`/`SetGrow`/`SetShrink`,
 `SetOnClick`/`SetOnActivate`/`SetOnHoverChange`/`SetOnKeyPress`/
 `SetOnKeyDown`/`SetOnKeyUp`, `IsFocused()`, `GetComputedRect()`,
-`Invalidate()`.
+`GetParent()`, `Invalidate()`, `Remove()` (see "Dynamic children" above).
 
 ### Tree-literal DSL (`Tree.h`)
 

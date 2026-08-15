@@ -1,5 +1,7 @@
 #include "Widget.h"
 
+#include "Container.h"
+
 #include <algorithm>
 #include <cmath>
 
@@ -30,6 +32,7 @@ bool IsKeyRepeated(int key, float& heldSeconds, float delay, float interval) {
 }
 
 Widget::~Widget() {
+    *aliveToken = false;
     if (g_focusedWidget == this) g_focusedWidget = nullptr;
 }
 
@@ -45,6 +48,10 @@ void Widget::Invalidate() {
         layoutDirty = true;
         if (parent) parent->Invalidate();
     }
+}
+
+std::unique_ptr<Widget> Widget::Remove() {
+    return parent ? parent->RemoveChild(this) : nullptr;
 }
 
 Widget& Widget::SetWidth(float width) {
@@ -102,19 +109,22 @@ Widget& Widget::SetOnKeyUp(std::function<void(int)> callback) {
 }
 
 void Widget::ReleaseAllKeys() {
-    for (int key : heldKeys) {
-        if (onKeyUp) onKeyUp(key);
+    // Move heldKeys out and copy onKeyUp before firing anything —
+    // onKeyUp may call Widget::Remove() on this widget (destroying it),
+    // so nothing below the first callback call may touch `this` again.
+    std::vector<int> keys = std::move(heldKeys);
+    auto callback = onKeyUp;
+    for (int key : keys) {
+        if (callback) callback(key);
     }
-    heldKeys.clear();
 }
 
 void Widget::PollPointerEvents(const Rectangle& rect) {
     Vector2 mouse = GetMousePosition();
     bool hovered = CheckCollisionPointRec(mouse, rect);
-    if (hovered != wasHovered) {
-        wasHovered = hovered;
-        if (onHoverChange) onHoverChange(hovered);
-    }
+    bool hoverChanged = hovered != wasHovered;
+    wasHovered = hovered;
+
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hovered) {
         pressOrigin = true;
         if (focusable && g_focusedWidget != this) {
@@ -127,14 +137,27 @@ void Widget::PollPointerEvents(const Rectangle& rect) {
             focused = true;
         }
     }
+
+    bool firesClick = false;
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-        if (hovered && pressOrigin) {
-            if (onClick) onClick();
-            if (onActivate) onActivate();
-        }
+        firesClick = hovered && pressOrigin;
         pressOrigin = false;
     }
+
     pointerDown = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
+
+    // Everything above this point is done touching `this`. Copy out
+    // whichever callbacks are about to fire before calling any of them:
+    // a callback (e.g. one that calls Widget::Remove() on this widget)
+    // may destroy `this`, which would make any further access to it —
+    // including reading another callback off it — undefined behavior.
+    auto hoverChangeCallback = hoverChanged ? onHoverChange : nullptr;
+    auto clickCallback = firesClick ? onClick : nullptr;
+    auto activateCallback = firesClick ? onActivate : nullptr;
+
+    if (hoverChangeCallback) hoverChangeCallback(hovered);
+    if (clickCallback) clickCallback();
+    if (activateCallback) activateCallback();
 }
 
 void Widget::CollectFocusable(std::vector<Widget*>& out) {
@@ -207,37 +230,53 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
 
     if ((IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) &&
         g_focusedWidget) {
-        if (g_focusedWidget->onActivate) g_focusedWidget->onActivate();
+        // Copy the callback out before calling it — onActivate may call
+        // Widget::Remove() on the focused widget (or an ancestor of it),
+        // destroying it.
+        auto activateCallback = g_focusedWidget->onActivate;
+        if (activateCallback) activateCallback();
     }
 
     // Raw key press/down/up bookkeeping for the focused widget. Drains
     // GetKeyPressed()'s frame-scoped queue exactly once, then walks the
     // widget's own heldKeys to fire onKeyDown every frame a key stays held
-    // and onKeyUp the frame it's released.
+    // and onKeyUp the frame it's released. onKeyPress/onKeyDown/onKeyUp may
+    // call Widget::Remove() on the focused widget (or an ancestor),
+    // destroying it mid-loop — `focusedAlive` (a copy of its alive-token,
+    // which outlives the widget) is checked before every further touch of
+    // `focusedWidget`, and GetKeyPressed() is still drained to completion
+    // even after that happens, so no key events leak into next frame.
     if (g_focusedWidget) {
-        Widget& focusedWidget = *g_focusedWidget;
+        Widget* focusedWidget = g_focusedWidget;
+        std::shared_ptr<bool> focusedAlive = focusedWidget->aliveToken;
+
         int key;
         while ((key = GetKeyPressed()) != 0) {
+            if (!*focusedAlive) continue;
             if (std::find(
-                    focusedWidget.heldKeys.begin(),
-                    focusedWidget.heldKeys.end(),
-                    key
-                ) == focusedWidget.heldKeys.end()) {
-                focusedWidget.heldKeys.push_back(key);
+                    focusedWidget->heldKeys.begin(),
+                    focusedWidget->heldKeys.end(), key
+                ) == focusedWidget->heldKeys.end()) {
+                focusedWidget->heldKeys.push_back(key);
             }
-            if (focusedWidget.onKeyPress) focusedWidget.onKeyPress(key);
+            auto onKeyPress = focusedWidget->onKeyPress;
+            if (onKeyPress) onKeyPress(key);
         }
 
-        for (size_t i = 0; i < focusedWidget.heldKeys.size();) {
-            int heldKey = focusedWidget.heldKeys[i];
+        for (size_t i = 0; *focusedAlive && i < focusedWidget->heldKeys.size();) {
+            int heldKey = focusedWidget->heldKeys[i];
             if (IsKeyUp(heldKey)) {
-                if (focusedWidget.onKeyUp) focusedWidget.onKeyUp(heldKey);
-                focusedWidget.heldKeys.erase(
-                    focusedWidget.heldKeys.begin() +
+                auto onKeyUp = focusedWidget->onKeyUp;
+                if (onKeyUp) onKeyUp(heldKey);
+                if (!*focusedAlive) break;
+                focusedWidget->heldKeys.erase(
+                    focusedWidget->heldKeys.begin() +
                     static_cast<std::ptrdiff_t>(i)
                 );
             } else {
-                if (focusedWidget.onKeyDown) focusedWidget.onKeyDown(heldKey);
+                auto onKeyDown = focusedWidget->onKeyDown;
+                if (onKeyDown) onKeyDown(heldKey);
+                if (!*focusedAlive) break;
                 i++;
             }
         }

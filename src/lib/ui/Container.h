@@ -3,6 +3,7 @@
 #include <raylib.h>
 
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include "Widget.h"
@@ -69,6 +70,32 @@ class Container : public Widget {
     /// Appends a child at runtime, e.g. for a dynamically-growing list.
     /// Tree literals built via Row()/Column() don't need this.
     void AppendChild(std::unique_ptr<Widget> child);
+
+    /// Inserts a child at `index` (clamped to [0, current child count], so
+    /// an out-of-range index behaves like AppendChild). Tree literals
+    /// built via Row()/Column() don't need this — it's for runtime
+    /// mutation.
+    void InsertChild(size_t index, std::unique_ptr<Widget> child);
+
+    /// Detaches `child` from this container and returns ownership of it,
+    /// or nullptr if `child` isn't actually a child of this container.
+    /// Widget::Remove() is usually more convenient than calling this
+    /// directly from outside.
+    std::unique_ptr<Widget> RemoveChild(Widget* child);
+
+    /// Number of direct children.
+    size_t ChildCount() const;
+    /// The child at `index`. Throws std::out_of_range if index is out of
+    /// bounds (same convention as std::vector::at).
+    Widget* ChildAt(size_t index) const;
+    /// `child`'s position among this container's direct children, or
+    /// nullopt if it isn't one.
+    std::optional<size_t> IndexOf(const Widget* child) const;
+    /// A snapshot of every direct child, in order. Builds a fresh vector
+    /// of non-owning pointers each call — fine for on-demand use (mirrors
+    /// CollectFocusable's own on-demand traversal), not meant to be
+    /// polled every frame.
+    std::vector<Widget*> Children() const;
 
     void Layout(const Rectangle& bounds) override;
     void ProcessEvents() override;

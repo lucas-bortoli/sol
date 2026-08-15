@@ -44,9 +44,50 @@ Container::Container(
 }
 
 void Container::AppendChild(std::unique_ptr<Widget> child) {
+    InsertChild(children.size(), std::move(child));
+}
+
+void Container::InsertChild(size_t index, std::unique_ptr<Widget> child) {
+    index = std::min(index, children.size());
     child->parent = this;
-    children.push_back(std::move(child));
+    children.insert(
+        children.begin() + static_cast<std::ptrdiff_t>(index), std::move(child)
+    );
     Invalidate();
+}
+
+std::unique_ptr<Widget> Container::RemoveChild(Widget* child) {
+    auto it = std::find_if(
+        children.begin(), children.end(),
+        [child](const std::unique_ptr<Widget>& c) { return c.get() == child; }
+    );
+    if (it == children.end()) return nullptr;
+
+    std::unique_ptr<Widget> removed = std::move(*it);
+    children.erase(it);
+    removed->parent = nullptr;
+    Invalidate();
+    return removed;
+}
+
+size_t Container::ChildCount() const { return children.size(); }
+
+Widget* Container::ChildAt(size_t index) const {
+    return children.at(index).get();
+}
+
+std::optional<size_t> Container::IndexOf(const Widget* child) const {
+    for (size_t i = 0; i < children.size(); i++) {
+        if (children[i].get() == child) return i;
+    }
+    return std::nullopt;
+}
+
+std::vector<Widget*> Container::Children() const {
+    std::vector<Widget*> out;
+    out.reserve(children.size());
+    for (const auto& c : children) out.push_back(c.get());
+    return out;
 }
 
 float Container::IntrinsicWidth() const {
@@ -333,7 +374,25 @@ void Container::ProcessEvents() {
         }
     }
 
-    for (auto& child : children) child->ProcessEvents();
+    // Snapshot children (pointer + alive-token) before iterating: a
+    // child's callback (fired from child->ProcessEvents() below) may call
+    // Widget::Remove() on any ancestor, including `this` container — not
+    // just on itself — which would destroy `this->children` (the very
+    // vector a plain range-for would still be iterating) or a
+    // not-yet-visited sibling out from under us. Checking each token
+    // before touching the corresponding object is what makes that safe:
+    // the token is a separate heap allocation that outlives the Widget it
+    // observes.
+    std::shared_ptr<bool> selfAlive = aliveToken;
+    std::vector<std::pair<Widget*, std::shared_ptr<bool>>> snapshot;
+    snapshot.reserve(children.size());
+    for (auto& child : children) snapshot.emplace_back(child.get(), child->aliveToken);
+
+    for (auto& [child, childAlive] : snapshot) {
+        if (!*childAlive) continue;  // already removed/destroyed by an earlier sibling's callback
+        child->ProcessEvents();
+        if (!*selfAlive) return;  // `this` was destroyed — `this->children` no longer exists
+    }
 }
 
 void Container::CollectFocusable(std::vector<Widget*>& out) {

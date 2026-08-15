@@ -3,6 +3,7 @@
 #include <raylib.h>
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -39,6 +40,24 @@ class Widget {
     /// layout recompute. Call after any mutation that can change size
     /// (SetText, property setters, adding/removing children).
     void Invalidate();
+
+    /// Detaches this widget from its parent (if any) and returns ownership
+    /// of it to the caller — DOM Node.remove()-style, but since C++ needs
+    /// an explicit owner, the returned unique_ptr IS this widget: keep it
+    /// to reattach elsewhere (e.g. pass to another Container's
+    /// AppendChild/InsertChild), or let it fall out of scope to destroy it
+    /// outright. No-op (returns nullptr) if this widget has no parent.
+    /// Safe to call — and discard the result of, destroying the widget —
+    /// from any onClick/onActivate/onHoverChange/onKeyPress/onKeyDown/
+    /// onKeyUp callback fired on it *or on any of its descendants*, e.g.
+    /// a "remove" button calling Remove() on its own parent row rather
+    /// than on itself. Every place that dispatches these callbacks
+    /// (PollPointerEvents, ReleaseAllKeys, ProcessKeyboardFocus, and
+    /// Container::ProcessEvents' child-iteration loop) checks a copy of
+    /// the destroyed object's alive-token before touching it again, so a
+    /// callback tearing down its own ancestor mid-dispatch can't leave
+    /// anything iterating over freed memory.
+    std::unique_ptr<Widget> Remove();
 
     /// Pin this widget's width instead of letting the parent size it from
     /// IntrinsicWidth(). Equivalent to CSS width (not flex-basis).
@@ -101,6 +120,11 @@ class Widget {
     /// The rectangle computed by the most recent Layout() call.
     const Rectangle& GetComputedRect() const { return computedRect; }
 
+    /// This widget's parent Container, or nullptr for a tree root. Only
+    /// Container ever has children, so this is typed as Container* rather
+    /// than the more generic Widget* — see the forward declaration above.
+    Container* GetParent() const { return parent; }
+
     /// Whether this widget currently holds the (single, app-wide) input
     /// focus. Only widgets that opt in (see `focusable`) can ever become
     /// focused; for everything else this is always false.
@@ -127,7 +151,19 @@ class Widget {
     friend class Container;
 
    protected:
-    Widget* parent = nullptr;
+    /// Liveness sentinel: true for as long as this Widget exists, flipped
+    /// to false in ~Widget(). A shared_ptr, not a plain bool, so it can be
+    /// observed (via a copy of the pointer) from code that keeps running
+    /// after `this` might have been destroyed — e.g. Container::
+    /// ProcessEvents() checking whether firing a child's callback (which
+    /// may call Widget::Remove() on an ancestor, not just itself)
+    /// destroyed `this` container, or destroyed a not-yet-visited sibling
+    /// — before touching `this` or that sibling again. The bool itself
+    /// outlives the Widget as long as at least one shared_ptr to it is
+    /// still held (it's a separate heap allocation from the Widget).
+    std::shared_ptr<bool> aliveToken = std::make_shared<bool>(true);
+
+    Container* parent = nullptr;
     bool layoutDirty = true;
     Rectangle computedRect{};
 
