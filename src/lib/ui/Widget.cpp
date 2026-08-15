@@ -143,30 +143,39 @@ void Widget::CollectFocusable(std::vector<Widget*>& out) {
 
 void Widget::ProcessKeyboardFocus(Widget& root) {
     // main.cpp calls this once per window tree, so it can run more than
-    // once within the same real frame. tabHeldSeconds must only accumulate
-    // GetFrameTime() once per frame regardless of call count, or repeat
-    // speed would scale with the number of trees — cache the decision by
-    // GetTime() (changes once per real frame) and reuse it for any extra
-    // calls that land in the same frame.
+    // once within the same real frame. Everything below that isn't scoped
+    // to a specific root (repeat timing, onActivate, raw key events) must
+    // still only happen once per real frame — cache a "new frame?" decision
+    // by GetTime() (changes once per real frame) and gate that work behind
+    // it so extra calls in the same frame are no-ops for it.
     static float tabHeldSeconds = 0.0f;
-    static double lastTabCheckTime = -1.0;
+    static double lastFrameTime = -1.0;
     static bool tabRepeatedThisFrame = false;
     double now = GetTime();
-    if (now != lastTabCheckTime) {
-        lastTabCheckTime = now;
+    bool newFrame = now != lastFrameTime;
+    if (newFrame) {
+        lastFrameTime = now;
         tabRepeatedThisFrame = IsKeyRepeated(KEY_TAB, tabHeldSeconds);
     }
+
     if (tabRepeatedThisFrame) {
         std::vector<Widget*> focusableWidgets;
         root.CollectFocusable(focusableWidgets);
-        if (!focusableWidgets.empty()) {
+        auto it = std::find(
+            focusableWidgets.begin(), focusableWidgets.end(), g_focusedWidget
+        );
+        // Only cycle within `root` if focus already lives in this tree, or
+        // nothing is focused anywhere yet — otherwise this call belongs to
+        // a different window than the one that currently owns focus, and
+        // must leave it alone (each window's tree gets its own call this
+        // frame; without this check, whichever call runs second would
+        // always steal focus into its own tree).
+        bool ownsFocus = it != focusableWidgets.end();
+        bool nothingFocusedAnywhere = g_focusedWidget == nullptr;
+        if (!focusableWidgets.empty() &&
+            (ownsFocus || nothingFocusedAnywhere)) {
             bool backward =
                 IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
-            auto it = std::find(
-                focusableWidgets.begin(),
-                focusableWidgets.end(),
-                g_focusedWidget
-            );
             size_t n = focusableWidgets.size();
             size_t nextIndex;
             if (it == focusableWidgets.end()) {
@@ -186,6 +195,11 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
             g_focusedWidget->focused = true;
         }
     }
+
+    // Everything below reads/mutates only g_focusedWidget's own state, not
+    // anything root-specific, so it must run exactly once per real frame —
+    // not once per root call — or onActivate/onKeyDown would double-fire.
+    if (!newFrame) return;
 
     if (g_focusedWidget) {
         g_focusedWidget->keyDown = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_SPACE);
