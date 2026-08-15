@@ -87,6 +87,12 @@ void TextBox::MoveCaret(int direction) {
 
 void TextBox::ProcessEvents() {
     Widget::ProcessEvents();  // click-to-focus, for free
+
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+        CheckCollisionPointRec(GetMousePosition(), GetComputedRect())) {
+        PlaceCaretAtMouse(GetMousePosition());
+    }
+
     if (!focused) return;
 
     blinkTimer += GetFrameTime();
@@ -132,6 +138,34 @@ void TextBox::ScrollToKeepCaretVisible() const {
     if (scrollOffsetPx < 0) scrollOffsetPx = 0;
 }
 
+void TextBox::PlaceCaretAtMouse(Vector2 mousePosition) {
+    Rectangle rect = GetComputedRect();
+    float localX = mousePosition.x - (rect.x + kPaddingX) + scrollOffsetPx;
+
+    size_t bestIndex = 0;
+    float bestDistance = fabsf(localX);
+    float cumulativeWidth = 0.0f;
+    size_t pos = 0;
+    while (pos < text.size()) {
+        size_t next = NextCodepointBoundary(text, pos);
+        std::string glyph = text.substr(pos, next - pos);
+        cumulativeWidth +=
+            MeasureTextEx(
+                assets::cozette, glyph.c_str(), assets::cozette.baseSize, 0
+            )
+                .x;
+        float distance = fabsf(localX - cumulativeWidth);
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestIndex = next;
+        }
+        pos = next;
+    }
+
+    caretByteIndex = bestIndex;
+    blinkTimer = 0.0f;
+}
+
 void TextBox::Draw() const {
     Rectangle rect = GetComputedRect();
 
@@ -163,7 +197,7 @@ void TextBox::Draw() const {
         {textX, innerRect.y},
         assets::cozette.baseSize,
         0,
-        NEUTRAL_200
+        NEUTRAL_600
     );
 
     if (focused && fmodf(blinkTimer, kBlinkPeriod) < kBlinkPeriod / 2.0f) {
@@ -175,6 +209,12 @@ void TextBox::Draw() const {
                                    0
                                )
                                    .x;
+
+        // otherwise the caret clips out
+        if (caretX == textX) {
+            caretX += 1;
+        }
+
         DrawLine(
             static_cast<int>(caretX),
             static_cast<int>(innerRect.y),

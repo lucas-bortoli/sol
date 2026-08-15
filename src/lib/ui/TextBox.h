@@ -8,7 +8,8 @@
 
 namespace ui {
 
-/// A single-line, UTF-8 text input. Click (or Tab) to focus, then type to
+/// A single-line, UTF-8 text input. Click (or Tab) to focus; clicking also
+/// places the caret at the nearest character boundary to the click. Type to
 /// insert; Backspace/Delete remove one codepoint at a time, Left/Right move
 /// the caret one codepoint, Home/End jump to the start/end. Holding any of
 /// these repeats it after a short delay, like a standard OS text field. No
@@ -50,6 +51,10 @@ class TextBox : public Widget {
     /// Recomputes scrollOffsetPx so the caret's on-screen x position stays
     /// within the box's inner content rect.
     void ScrollToKeepCaretVisible() const;
+    /// Moves the caret to the character boundary closest to `mousePosition`
+    /// (screen space), accounting for the current scroll offset. Resets the
+    /// blink phase.
+    void PlaceCaretAtMouse(Vector2 mousePosition);
 
     std::string text;
     size_t caretByteIndex = 0;
