@@ -3,7 +3,9 @@
 #include <raylib.h>
 #include <raymath.h>
 
+#include <algorithm>
 #include <map>
+#include <memory>
 #include <mutex>
 #include <string>
 
@@ -18,6 +20,7 @@ struct Window {
     std::string title;
     Rectangle clientRect;
     bool resizable;
+    std::unique_ptr<ui::Widget> content;
 };
 
 static WindowHandle _handle_counter = 0;
@@ -27,16 +30,18 @@ static std::mutex _window_mutex;
 WindowHandle WindowCreate() {
     std::lock_guard<std::mutex> lock(_window_mutex);
 
+    WindowHandle handle = _handle_counter++;
     Window window = {
-        .handle = _handle_counter++,
+        .handle = handle,
         .title = "New Window",
         .clientRect = {0, 0, 0, 0},
         .resizable = true,
+        .content = nullptr,
     };
 
-    _window_map.emplace(window.handle, window);
+    _window_map.emplace(handle, std::move(window));
 
-    return window.handle;
+    return handle;
 }
 
 void WindowSetTitle(WindowHandle handle, const std::string& newTitle) {
@@ -70,8 +75,55 @@ void WindowDestroy(WindowHandle handle) {
     _window_map.erase(handle);
 }
 
+namespace {
+Rectangle ComputeClientRect(const Window& window) {
+    // Content-inset geometry: breathing room around the 1px border + 16px
+    // titlebar that Draw() paints , matched to what call sites used to
+    // hand-type per window before WindowGetClientRect() existed.
+    constexpr float kContentInsetLeft = 0.0f;
+    constexpr float kContentInsetRight = 0.0f;
+    constexpr float kContentInsetTop = 18.0f;
+    constexpr float kContentInsetBottom = 0.0f;
+
+    return {
+        window.clientRect.x + kContentInsetLeft,
+        window.clientRect.y + kContentInsetTop,
+        std::max(
+            0.0f,
+            window.clientRect.width - kContentInsetLeft - kContentInsetRight
+        ),
+        std::max(
+            0.0f,
+            window.clientRect.height - kContentInsetTop - kContentInsetBottom
+        ),
+    };
+}
+}  // namespace
+
+Rectangle WindowGetClientRect(WindowHandle handle) {
+    std::lock_guard<std::mutex> lock(_window_mutex);
+    return ComputeClientRect(_window_map.at(handle));
+}
+
+void WindowSetContent(
+    WindowHandle handle, std::unique_ptr<ui::Widget> content
+) {
+    std::lock_guard<std::mutex> lock(_window_mutex);
+    Window& window = _window_map.at(handle);
+    window.content = std::move(content);
+}
+
 namespace internal {
 void Initialize() {}
+
+void ProcessEvents() {
+    std::lock_guard<std::mutex> lock(_window_mutex);
+    for (const auto& [handle, window] : _window_map) {
+        if (!window.content) continue;
+        window.content->ProcessEvents();
+        ui::Widget::ProcessKeyboardFocus(*window.content);
+    }
+}
 
 void Draw() {
     std::lock_guard<std::mutex> lock(_window_mutex);
@@ -136,6 +188,12 @@ void Draw() {
             closeButtonRect.y + 4,
             WHITE
         );
+
+        if (window.content) {
+            Rectangle clientRect = ComputeClientRect(window);
+            window.content->Layout(clientRect);
+            window.content->Draw();
+        }
     }
 }
 

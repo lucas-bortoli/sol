@@ -114,6 +114,16 @@ class Widget {
     /// recursion. Call after root->ProcessEvents() and before root->Draw().
     static void ProcessKeyboardFocus(Widget& root);
 
+    /// Appends this widget to `out` if it is focusable. Containers override
+    /// to recurse into children first, so the resulting list is in
+    /// depth-first tree order — the order Tab/Shift+Tab cycle through.
+    /// Called on demand only when Tab is actually pressed, not every frame.
+    /// Public (rather than protected, like the rest of this traversal
+    /// trio) so a Widget that owns another Widget it didn't itself
+    /// construct — e.g. wm::GetWindowClientWidget's wrapper — can still
+    /// recurse into it without needing Container's friendship.
+    virtual void CollectFocusable(std::vector<Widget*>& out);
+
     friend class Container;
 
    protected:
@@ -177,12 +187,6 @@ class Widget {
     /// onHoverChange as needed, and updates pointerDown. Called from
     /// ProcessEvents() by widgets that support input.
     void PollPointerEvents(const Rectangle& rect);
-
-    /// Appends this widget to `out` if it is focusable. Containers override
-    /// to recurse into children first, so the resulting list is in
-    /// depth-first tree order — the order Tab/Shift+Tab cycle through.
-    /// Called on demand only when Tab is actually pressed, not every frame.
-    virtual void CollectFocusable(std::vector<Widget*>& out);
 
    private:
     /// Fires onKeyUp for every still-held key and clears heldKeys. Called
