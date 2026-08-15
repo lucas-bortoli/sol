@@ -8,7 +8,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(RAYLIB_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(external/raylib)
-add_subdirectory(external/yoga/yoga)
 
 target_compile_definitions(raylib PRIVATE
     SUPPORT_FILEFORMAT_BDF=1
@@ -21,7 +20,10 @@ add_executable(rocketship
     src/window_manager.cpp
     src/assets.cpp
     src/lib/ui/Utils.cpp
+    src/lib/ui/Widget.cpp
+    src/lib/ui/Panel.cpp
+    src/lib/ui/Label.cpp
+    src/lib/ui/Button.cpp
 )
 
-target_link_libraries(rocketship PRIVATE raylib 
-    yogacore)
+target_link_libraries(rocketship PRIVATE raylib)
