@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+
 #include "raylib.h"
 
 // Helper to safely parse hex to unsigned int
@@ -39,10 +40,8 @@ Font LoadFontBDF(const char* fileName) {
 
     while (std::getline(file, line)) {
         // Strip trailing carriage return if CRLF
-        if (!line.empty() && line.back() == '\r')
-            line.pop_back();
-        if (line.empty())
-            continue;
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.empty()) continue;
 
         std::istringstream iss(line);
         std::string token;
@@ -113,8 +112,7 @@ Font LoadFontBDF(const char* fileName) {
                     (unsigned char*)currentGlyph.image.data;
 
                 for (int i = 0; i < widthBytes; i++) {
-                    if (i * 2 >= (int)line.length())
-                        break;
+                    if (i * 2 >= (int)line.length()) break;
                     std::string hexByte = line.substr(i * 2, 2);
                     unsigned int byteVal = HexToUInt(hexByte);
 
@@ -162,8 +160,9 @@ Font LoadFontBDF(const char* fileName) {
     // Let Raylib pack the individual GlyphInfo images into a single Texture
     // Atlas
     Rectangle* recs = nullptr;
-    Image atlas = GenImageFontAtlas(font.glyphs, &recs, font.glyphCount,
-                                    font.baseSize, font.glyphPadding, 0);
+    Image atlas = GenImageFontAtlas(
+        font.glyphs, &recs, font.glyphCount, font.baseSize, font.glyphPadding, 0
+    );
 
     font.texture = LoadTextureFromImage(atlas);
     font.recs = recs;
@@ -171,8 +170,12 @@ Font LoadFontBDF(const char* fileName) {
     // Clean up temporary atlas image
     UnloadImage(atlas);
 
-    TraceLog(LOG_INFO, "BDF: Loaded font %s with %d glyphs", fileName,
-             font.glyphCount);
+    TraceLog(
+        LOG_INFO,
+        "BDF: Loaded font %s with %d glyphs",
+        fileName,
+        font.glyphCount
+    );
 
     return font;
 }

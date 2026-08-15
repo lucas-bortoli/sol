@@ -1,5 +1,8 @@
+#include "window_manager.h"
+
 #include <raylib.h>
 #include <raymath.h>
+
 #include <map>
 #include <mutex>
 #include <optional>
@@ -8,7 +11,6 @@
 #include "assets.h"
 #include "lib/ui/Utils.h"
 #include "palette.h"
-#include "window_manager.h"
 
 namespace wm {
 
@@ -77,30 +79,33 @@ void WindowDestroy(WindowHandle handle) {
     _window_map.erase(handle);
 }
 
-void WindowSetHandlerForDrawing(WindowHandle handle,
-                                std::optional<DrawingHandler_t> handler) {
+void WindowSetHandlerForDrawing(
+    WindowHandle handle, std::optional<DrawingHandler_t> handler
+) {
     std::lock_guard<std::mutex> lock(_window_mutex);
     Window& window = _window_map.at(handle);
     window.drawHandler = handler;
 }
 
 void WindowSetHandlerForCloseButton(
-    WindowHandle handle,
-    std::optional<CloseButtonHandler_t> handler) {
+    WindowHandle handle, std::optional<CloseButtonHandler_t> handler
+) {
     std::lock_guard<std::mutex> lock(_window_mutex);
     Window& window = _window_map.at(handle);
     window.closeHandler = handler;
 }
 
-void WindowSetHandlerForPointer(WindowHandle handle,
-                                std::optional<PointerHandler_t> handler) {
+void WindowSetHandlerForPointer(
+    WindowHandle handle, std::optional<PointerHandler_t> handler
+) {
     std::lock_guard<std::mutex> lock(_window_mutex);
     Window& window = _window_map.at(handle);
     window.pointerHandler = handler;
 }
 
-void WindowSetHandlerForKeyboard(WindowHandle handle,
-                                 std::optional<KeyboardHandler_t> handler) {
+void WindowSetHandlerForKeyboard(
+    WindowHandle handle, std::optional<KeyboardHandler_t> handler
+) {
     std::lock_guard<std::mutex> lock(_window_mutex);
     Window& window = _window_map.at(handle);
     window.keyboardHandler = handler;
@@ -119,33 +124,60 @@ void Draw() {
             continue;
         }
 
-        ui::DrawRectWithBorderAndShadow(window.clientRect, WHITE, NEUTRAL_600,
-                                        2);
+        ui::DrawRectWithBorderAndShadow(
+            window.clientRect, WHITE, NEUTRAL_600, 2
+        );
 
         // titlebar
-        Rectangle titlebar = {window.clientRect.x + 1, window.clientRect.y + 1,
-                              window.clientRect.width - 2, 16};
+        Rectangle titlebar = {
+            window.clientRect.x + 1,
+            window.clientRect.y + 1,
+            window.clientRect.width - 2,
+            16
+        };
 
         if (CheckCollisionPointRec(mousePos, titlebar)) {
-            DrawRectangle(titlebar.x, titlebar.y, titlebar.width,
-                          titlebar.height, NEUTRAL_400);
+            DrawRectangle(
+                titlebar.x,
+                titlebar.y,
+                titlebar.width,
+                titlebar.height,
+                NEUTRAL_400
+            );
         } else {
-            DrawRectangle(titlebar.x, titlebar.y, titlebar.width,
-                          titlebar.height, RED_400);
+            DrawRectangle(
+                titlebar.x, titlebar.y, titlebar.width, titlebar.height, RED_400
+            );
         }
 
-        ui::DrawText(window.title.c_str(), window.clientRect.x + 3,
-                     window.clientRect.y + 3, NEUTRAL_200);
+        ui::DrawText(
+            window.title.c_str(),
+            window.clientRect.x + 3,
+            window.clientRect.y + 3,
+            NEUTRAL_200
+        );
 
         if (true || window.closeHandler.has_value()) {
             Rectangle closeButtonRect = {
                 window.clientRect.x + window.clientRect.width - 18 - 1,
-                window.clientRect.y + 1, 16, 14};
+                window.clientRect.y + 1,
+                16,
+                14
+            };
             // titlebar X
-            DrawRectangle(closeButtonRect.x, closeButtonRect.y,
-                          closeButtonRect.width, closeButtonRect.height, RED);
-            DrawTexture(assets::WindowCloseButtonX, closeButtonRect.x + 5,
-                        closeButtonRect.y + 4, WHITE);
+            DrawRectangle(
+                closeButtonRect.x,
+                closeButtonRect.y,
+                closeButtonRect.width,
+                closeButtonRect.height,
+                RED
+            );
+            DrawTexture(
+                assets::WindowCloseButtonX,
+                closeButtonRect.x + 5,
+                closeButtonRect.y + 4,
+                WHITE
+            );
         }
     }
 }

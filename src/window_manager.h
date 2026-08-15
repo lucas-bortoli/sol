@@ -1,6 +1,7 @@
 #pragma once
 
 #include <raylib.h>
+
 #include <optional>
 #include <string>
 
@@ -19,15 +20,18 @@ void WindowSetPosition(WindowHandle handle, const Vector2& newPosition);
 void WindowSetSize(WindowHandle handle, const Vector2& newSize);
 void WindowSetResizable(WindowHandle handle, const bool resizable);
 void WindowDestroy(WindowHandle handle);
-void WindowSetHandlerForDrawing(WindowHandle handle,
-                                std::optional<DrawingHandler_t> handler);
+void WindowSetHandlerForDrawing(
+    WindowHandle handle, std::optional<DrawingHandler_t> handler
+);
 void WindowSetHandlerForCloseButton(
-    WindowHandle handle,
-    std::optional<CloseButtonHandler_t> handler);
-void WindowSetHandlerForPointer(WindowHandle handle,
-                                std::optional<PointerHandler_t> handler);
-void WindowSetHandlerForKeyboard(WindowHandle handle,
-                                 std::optional<KeyboardHandler_t> handler);
+    WindowHandle handle, std::optional<CloseButtonHandler_t> handler
+);
+void WindowSetHandlerForPointer(
+    WindowHandle handle, std::optional<PointerHandler_t> handler
+);
+void WindowSetHandlerForKeyboard(
+    WindowHandle handle, std::optional<KeyboardHandler_t> handler
+);
 
 namespace internal {
 void Initialize();
