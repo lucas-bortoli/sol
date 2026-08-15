@@ -22,7 +22,7 @@ int main() {
     wm::WindowSetTitle(myWindow, "Player Stats");
 
     auto myWindow2 = wm::WindowCreate();
-    wm::WindowSetSize(myWindow2, {200, 110});
+    wm::WindowSetSize(myWindow2, {200, 140});
     wm::WindowSetPosition(myWindow2, {300, 16});
     wm::WindowSetTitle(myWindow2, "Greeter");
 
@@ -55,13 +55,18 @@ int main() {
     );
 
     ui::Label* greeting = nullptr;
+    ui::TextBox* nameInput = nullptr;
 
     std::unique_ptr<ui::Widget> ui_root2 = ui::Column(
         {.gap = 6, .padding = 8},
         ui::Text("Hello there!").Ref(greeting),
-        ui::Btn("Say Hi").OnClick(
-            [&greeting] { greeting->SetText("Hi yourself!"); }
-        )
+        ui::Input("").Ref(nameInput),
+        ui::Btn("Say Hi").OnClick([&greeting, &nameInput] {
+            std::string name = nameInput->GetText();
+            greeting->SetText(
+                name.empty() ? "Hi yourself!" : "Hi, " + name + "!"
+            );
+        })
     );
 
     while (!WindowShouldClose()) {
@@ -82,8 +87,9 @@ int main() {
         ui_root->Layout(windowContent);
         ui_root->Draw();
 
-        Rectangle windowContent2 = {300 + 4, 16 + 18, 200 - 8, 110 - 22};
+        Rectangle windowContent2 = {300 + 4, 16 + 18, 200 - 8, 140 - 22};
         ui_root2->ProcessEvents();
+        ui::Widget::ProcessKeyboardFocus(*ui_root2);
 
         ui_root2->Layout(windowContent2);
         ui_root2->Draw();

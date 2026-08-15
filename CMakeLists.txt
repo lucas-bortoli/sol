@@ -24,6 +24,7 @@ add_executable(rocketship
     src/lib/ui/Container.cpp
     src/lib/ui/Label.cpp
     src/lib/ui/Button.cpp
+    src/lib/ui/TextBox.cpp
 )
 
 target_link_libraries(rocketship PRIVATE raylib)

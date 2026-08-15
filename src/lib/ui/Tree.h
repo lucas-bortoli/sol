@@ -7,8 +7,9 @@
 #include <vector>
 
 #include "Button.h"
-#include "Label.h"
 #include "Container.h"
+#include "Label.h"
+#include "TextBox.h"
 #include "Widget.h"
 
 namespace ui {
@@ -111,6 +112,11 @@ inline Node<Label> Text(std::string text) {
 /// Tree-literal factory for a Button.
 inline Node<Button> Btn(std::string text) {
     return MakeNode<Button>(std::move(text));
+}
+
+/// Tree-literal factory for a TextBox.
+inline Node<TextBox> Input(std::string initialText = "") {
+    return MakeNode<TextBox>(std::move(initialText));
 }
 
 /// Designated-initializer property bag for Row()/Column(), e.g.

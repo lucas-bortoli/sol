@@ -5,7 +5,8 @@
 /// what a translation unit pulls in.
 
 #include "Button.h"
-#include "Label.h"
 #include "Container.h"
+#include "Label.h"
+#include "TextBox.h"
 #include "Tree.h"
 #include "Widget.h"
