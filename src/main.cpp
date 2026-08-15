@@ -21,6 +21,11 @@ int main() {
     wm::WindowSetPosition(myWindow, {16, 16});
     wm::WindowSetTitle(myWindow, "Player Stats");
 
+    auto myWindow2 = wm::WindowCreate();
+    wm::WindowSetSize(myWindow2, {200, 110});
+    wm::WindowSetPosition(myWindow2, {300, 16});
+    wm::WindowSetTitle(myWindow2, "Greeter");
+
     int score = 0;
     int level = 1;
 
@@ -49,6 +54,16 @@ int main() {
         ui::Btn("Level Up").OnClick([&level] { level++; })
     );
 
+    ui::Label* greeting = nullptr;
+
+    std::unique_ptr<ui::Widget> ui_root2 = ui::Column(
+        {.gap = 6, .padding = 8},
+        ui::Text("Hello there!").Ref(greeting),
+        ui::Btn("Say Hi").OnClick(
+            [&greeting] { greeting->SetText("Hi yourself!"); }
+        )
+    );
+
     while (!WindowShouldClose()) {
         auto mousePos = GetMousePosition();
 
@@ -59,12 +74,19 @@ int main() {
 
         Rectangle windowContent = {16 + 4, 16 + 18, 260 - 8, 190 - 22};
         ui_root->ProcessEvents();
+        ui::Widget::ProcessKeyboardFocus(*ui_root);
 
         scoreValue->SetText(std::to_string(score));
         levelValue->SetText(std::to_string(level));
 
         ui_root->Layout(windowContent);
         ui_root->Draw();
+
+        Rectangle windowContent2 = {300 + 4, 16 + 18, 200 - 8, 110 - 22};
+        ui_root2->ProcessEvents();
+
+        ui_root2->Layout(windowContent2);
+        ui_root2->Draw();
 
         // lastly: the cursor
         if (IsCursorOnScreen()) {
@@ -76,6 +98,7 @@ int main() {
     }
 
     wm::WindowDestroy(myWindow);
+    wm::WindowDestroy(myWindow2);
 
     wm::internal::Cleanup();
     assets::Cleanup();
