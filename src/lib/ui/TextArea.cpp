@@ -92,6 +92,13 @@ void TextArea::InsertCodepoint(const char* utf8Bytes, int byteCount) {
     // caretByteIndex is always codepoint-aligned.
     text.insert(caretByteIndex, utf8Bytes, byteCount);
     caretByteIndex += byteCount;
+    // Resync the anchor to the new caret position — InsertCodepoint is
+    // never used to extend a selection (unlike MoveCaret/MoveCaretVertical,
+    // which are also called from ApplySelectableMovement's Shift-extend
+    // path and must NOT do this), so typing always collapses any leftover
+    // selection state instead of leaving a stale anchor behind that would
+    // make HasSelection() spuriously true afterward.
+    selectionAnchor = caretByteIndex;
     blinkTimer = 0.0f;
     visualLinesDirty = true;
     desiredColumnDirty = true;
@@ -106,6 +113,7 @@ void TextArea::InsertNewline() {
     // This '\n' is what RewrapIfNeeded's hard-break scan looks for.
     text.insert(caretByteIndex, "\n", 1);
     caretByteIndex += 1;
+    selectionAnchor = caretByteIndex;  // see InsertCodepoint's comment
     blinkTimer = 0.0f;
     visualLinesDirty = true;
     desiredColumnDirty = true;
@@ -121,6 +129,7 @@ void TextArea::DeleteBackward() {
     size_t start = PrevCodepointBoundary(text, caretByteIndex);
     text.erase(start, caretByteIndex - start);
     caretByteIndex = start;
+    selectionAnchor = caretByteIndex;  // see InsertCodepoint's comment
     blinkTimer = 0.0f;
     visualLinesDirty = true;
     desiredColumnDirty = true;
@@ -133,6 +142,7 @@ void TextArea::DeleteForward() {
     // caret instead (same line-joining behavior if it's a '\n').
     size_t end = NextCodepointBoundary(text, caretByteIndex);
     text.erase(caretByteIndex, end - caretByteIndex);
+    selectionAnchor = caretByteIndex;  // see InsertCodepoint's comment
     blinkTimer = 0.0f;
     visualLinesDirty = true;
     desiredColumnDirty = true;

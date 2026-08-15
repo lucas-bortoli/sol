@@ -40,6 +40,13 @@ void TextBox::InsertCodepoint(const char* utf8Bytes, int byteCount) {
     // split a multi-byte character in half.
     text.insert(caretByteIndex, utf8Bytes, byteCount);
     caretByteIndex += byteCount;
+    // Resync the anchor to the new caret position — InsertCodepoint is
+    // never used to extend a selection (unlike MoveCaret, which is also
+    // called from ApplySelectableMovement's Shift-extend path and must
+    // NOT do this), so typing always collapses any leftover selection
+    // state instead of leaving a stale anchor behind that would make
+    // HasSelection() spuriously true afterward.
+    selectionAnchor = caretByteIndex;
     blinkTimer = 0.0f;  // typing should always show a solid, visible caret
     Invalidate();       // width may have changed, so parent layout must redo
 }
@@ -52,6 +59,7 @@ void TextBox::DeleteBackward() {
     size_t start = PrevCodepointBoundary(text, caretByteIndex);
     text.erase(start, caretByteIndex - start);
     caretByteIndex = start;
+    selectionAnchor = caretByteIndex;  // see InsertCodepoint's comment
     blinkTimer = 0.0f;
     Invalidate();
 }
@@ -62,6 +70,7 @@ void TextBox::DeleteForward() {
     // the codepoint ahead of the caret instead of behind it.
     size_t end = NextCodepointBoundary(text, caretByteIndex);
     text.erase(caretByteIndex, end - caretByteIndex);
+    selectionAnchor = caretByteIndex;  // see InsertCodepoint's comment
     blinkTimer = 0.0f;
     Invalidate();
 }
