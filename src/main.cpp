@@ -9,8 +9,8 @@
 #include "window_manager.h"
 
 int main() {
-    InitWindow(640, 360, "Geminata OS");
-    SetTargetFPS(30);
+    InitWindow(640, 400, "Geminata OS");
+    SetTargetFPS(60);
     HideCursor();
 
     assets::Initialize();
@@ -25,6 +25,11 @@ int main() {
     wm::WindowSetSize(myWindow2, {200, 140});
     wm::WindowSetPosition(myWindow2, {300, 16});
     wm::WindowSetTitle(myWindow2, "Greeter");
+
+    auto myWindow3 = wm::WindowCreate();
+    wm::WindowSetSize(myWindow3, {260, 150});
+    wm::WindowSetPosition(myWindow3, {16, 220});
+    wm::WindowSetTitle(myWindow3, "Notes");
 
     int score = 0;
     int level = 1;
@@ -69,6 +74,15 @@ int main() {
         })
     );
 
+    std::unique_ptr<ui::Widget> ui_root3 = ui::Column(
+        {.gap = 6, .padding = 8},
+        ui::Text("Notes (Shift+Enter to log)"),
+        ui::Textarea("Type some notes here.\nTry a long line to see it wrap.")
+            .WrapMode(ui::TextAreaWrapMode::Character)
+            .VisibleRows(1)
+            .Grow(1)
+    );
+
     while (!WindowShouldClose()) {
         auto mousePos = GetMousePosition();
 
@@ -94,6 +108,13 @@ int main() {
         ui_root2->Layout(windowContent2);
         ui_root2->Draw();
 
+        Rectangle windowContent3 = {16 + 4, 220 + 18, 260 - 8, 150 - 22};
+        ui_root3->ProcessEvents();
+        ui::Widget::ProcessKeyboardFocus(*ui_root3);
+
+        ui_root3->Layout(windowContent3);
+        ui_root3->Draw();
+
         // lastly: the cursor
         if (IsCursorOnScreen()) {
             DrawTexture(assets::CursorDefault, mousePos.x, mousePos.y, WHITE);
@@ -105,6 +126,7 @@ int main() {
 
     wm::WindowDestroy(myWindow);
     wm::WindowDestroy(myWindow2);
+    wm::WindowDestroy(myWindow3);
 
     wm::internal::Cleanup();
     assets::Cleanup();

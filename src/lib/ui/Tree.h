@@ -9,6 +9,7 @@
 #include "Button.h"
 #include "Container.h"
 #include "Label.h"
+#include "TextArea.h"
 #include "TextBox.h"
 #include "Widget.h"
 
@@ -100,6 +101,22 @@ class Node {
         widget->SetOnKeyUp(std::move(callback));
         return *this;
     }
+    /// Sets a TextArea's wrap mode. See TextArea::SetWrapMode.
+    Node& WrapMode(TextAreaWrapMode mode) {
+        widget->SetWrapMode(mode);
+        return *this;
+    }
+    /// Sets a TextArea's visible row count. See TextArea::SetVisibleRows.
+    Node& VisibleRows(int rows) {
+        widget->SetVisibleRows(rows);
+        return *this;
+    }
+    /// Registers a TextArea Shift+Enter submit callback. See
+    /// TextArea::SetOnSubmit.
+    Node& OnSubmit(std::function<void()> callback) {
+        widget->SetOnSubmit(std::move(callback));
+        return *this;
+    }
 
     operator std::unique_ptr<Widget>() { return std::move(widget); }
 
@@ -138,6 +155,11 @@ inline Node<Button> Btn(std::string text) {
 /// Tree-literal factory for a TextBox.
 inline Node<TextBox> Input(std::string initialText = "") {
     return MakeNode<TextBox>(std::move(initialText));
+}
+
+/// Tree-literal factory for a TextArea.
+inline Node<TextArea> Textarea(std::string initialText = "") {
+    return MakeNode<TextArea>(std::move(initialText));
 }
 
 /// Designated-initializer property bag for Row()/Column(), e.g.
