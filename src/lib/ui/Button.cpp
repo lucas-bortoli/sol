@@ -35,7 +35,7 @@ void Button::Layout(const Rectangle& bounds) {
 void Button::Draw() const {
     auto computedRect = this->GetComputedRect();
 
-    bool isBeingClicked = pointerDown;
+    bool isBeingClicked = pointerDown || keyDown;
 
     Rectangle drawnRect = computedRect;
 

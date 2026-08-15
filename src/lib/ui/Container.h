@@ -61,6 +61,7 @@ class Container : public Widget {
    protected:
     float IntrinsicWidth() const override;
     float IntrinsicHeight() const override;
+    void CollectFocusable(std::vector<Widget*>& out) override;
 
    private:
     Direction direction;

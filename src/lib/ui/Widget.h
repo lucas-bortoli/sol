@@ -4,6 +4,7 @@
 
 #include <functional>
 #include <optional>
+#include <vector>
 
 namespace ui {
 
@@ -76,6 +77,13 @@ class Widget {
     /// focused; for everything else this is always false.
     bool IsFocused() const { return focused; }
 
+    /// Handles Tab / Shift+Tab focus cycling and Enter/Space activation for
+    /// the tree rooted at `root`. Must be called exactly once per frame (not
+    /// once per widget) — reads raylib's frame-scoped IsKeyPressed state,
+    /// which would double-fire if invoked from ProcessEvents()'s per-widget
+    /// recursion. Call after root->ProcessEvents() and before root->Draw().
+    static void ProcessKeyboardFocus(Widget& root);
+
     friend class Container;
 
    protected:
@@ -97,6 +105,12 @@ class Widget {
     /// the last ProcessEvents() call. Draw() reads this instead of polling
     /// input itself, since Draw() is const.
     bool pointerDown = false;
+
+    /// Whether this widget is focused and Enter/Space is currently held, as
+    /// of the last ProcessKeyboardFocus() call. Draw() reads this alongside
+    /// pointerDown so a keyboard-activated widget shows the same pressed
+    /// visual as a mouse-pressed one.
+    bool keyDown = false;
 
     /// Whether this widget type participates in focus at all. False for
     /// every Widget by default; set true by a subclass's constructor (e.g.
@@ -122,6 +136,12 @@ class Widget {
     /// onHoverChange as needed, and updates pointerDown. Called from
     /// ProcessEvents() by widgets that support input.
     void PollPointerEvents(const Rectangle& rect);
+
+    /// Appends this widget to `out` if it is focusable. Containers override
+    /// to recurse into children first, so the resulting list is in
+    /// depth-first tree order — the order Tab/Shift+Tab cycle through.
+    /// Called on demand only when Tab is actually pressed, not every frame.
+    virtual void CollectFocusable(std::vector<Widget*>& out);
 };
 
 }  // namespace ui

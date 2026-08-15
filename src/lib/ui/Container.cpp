@@ -223,6 +223,11 @@ void Container::ProcessEvents() {
     for (auto& child : children) child->ProcessEvents();
 }
 
+void Container::CollectFocusable(std::vector<Widget*>& out) {
+    Widget::CollectFocusable(out);
+    for (auto& child : children) child->CollectFocusable(out);
+}
+
 void Container::Draw() const {
     for (const auto& child : children) child->Draw();
 }
