@@ -7,6 +7,8 @@ void Widget::Layout(const Rectangle& bounds) {
     layoutDirty = false;
 }
 
+void Widget::ProcessEvents() { PollPointerEvents(computedRect); }
+
 void Widget::Invalidate() {
     if (!layoutDirty) {
         layoutDirty = true;
@@ -36,6 +38,35 @@ Widget& Widget::SetShrink(float shrink) {
     shrinkFactor = shrink;
     Invalidate();
     return *this;
+}
+
+Widget& Widget::SetOnClick(std::function<void()> callback) {
+    onClick = std::move(callback);
+    return *this;
+}
+
+Widget& Widget::SetOnHoverChange(std::function<void(bool)> callback) {
+    onHoverChange = std::move(callback);
+    return *this;
+}
+
+void Widget::PollPointerEvents(const Rectangle& rect) {
+    Vector2 mouse = GetMousePosition();
+    bool hovered = CheckCollisionPointRec(mouse, rect);
+    if (hovered != wasHovered) {
+        wasHovered = hovered;
+        if (onHoverChange) onHoverChange(hovered);
+    }
+    if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hovered) {
+        pressOrigin = true;
+    }
+    if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+        if (hovered && pressOrigin && onClick) {
+            onClick();
+        }
+        pressOrigin = false;
+    }
+    pointerDown = hovered && IsMouseButtonDown(MOUSE_BUTTON_LEFT);
 }
 
 }  // namespace ui

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -7,14 +8,14 @@
 
 #include "Button.h"
 #include "Label.h"
-#include "Panel.h"
+#include "Container.h"
 #include "Widget.h"
 
 namespace ui {
 
 // ---------------------------------------------------------- tree literals --
 //
-// Widget/Panel/Label/Button are the runtime widget classes; everything in
+// Widget/Container/Label/Button are the runtime widget classes; everything in
 // this file is the declarative surface used to actually describe a UI,
 // e.g.:
 //
@@ -67,6 +68,16 @@ class Node {
         widget->SetShrink(shrink);
         return *this;
     }
+    /// Registers a click callback. See Widget::SetOnClick.
+    Node& OnClick(std::function<void()> callback) {
+        widget->SetOnClick(std::move(callback));
+        return *this;
+    }
+    /// Registers a hover-change callback. See Widget::SetOnHoverChange.
+    Node& OnHoverChange(std::function<void(bool)> callback) {
+        widget->SetOnHoverChange(std::move(callback));
+        return *this;
+    }
 
     operator std::unique_ptr<Widget>() { return std::move(widget); }
 
@@ -82,7 +93,7 @@ Node<T> MakeNode(Args&&... args) {
 }
 
 /// Collects a Row()/Column() parameter pack of Node<...> children into the
-/// vector Panel's constructor wants. Not usually called directly.
+/// vector Container's constructor wants. Not usually called directly.
 template <typename... NodesT>
 std::vector<std::unique_ptr<Widget>> Children(NodesT&&... nodes) {
     std::vector<std::unique_ptr<Widget>> result;
@@ -104,7 +115,7 @@ inline Node<Button> Btn(std::string text) {
 
 /// Designated-initializer property bag for Row()/Column(), e.g.
 /// Row({.justify = Justify::SpaceBetween, .gap = 4}, ...).
-struct PanelProps {
+struct ContainerProps {
     Justify justify = Justify::Start;
     Align align = Align::Stretch;
     float gap = 0.0f;
@@ -112,12 +123,12 @@ struct PanelProps {
     bool reverse = false;
 };
 
-/// Tree-literal factory for a Row-direction Panel (or RowReverse, via
+/// Tree-literal factory for a Row-direction Container (or RowReverse, via
 /// props.reverse). See the tree-literal example above.
 template <typename... NodesT>
-Node<Panel> Row(PanelProps props, NodesT&&... children) {
+Node<Container> Row(ContainerProps props, NodesT&&... children) {
     Direction dir = props.reverse ? Direction::RowReverse : Direction::Row;
-    return MakeNode<Panel>(
+    return MakeNode<Container>(
         dir,
         props.justify,
         props.align,
@@ -127,13 +138,13 @@ Node<Panel> Row(PanelProps props, NodesT&&... children) {
     );
 }
 
-/// Tree-literal factory for a Column-direction Panel (or ColumnReverse, via
+/// Tree-literal factory for a Column-direction Container (or ColumnReverse, via
 /// props.reverse).
 template <typename... NodesT>
-Node<Panel> Column(PanelProps props, NodesT&&... children) {
+Node<Container> Column(ContainerProps props, NodesT&&... children) {
     Direction dir =
         props.reverse ? Direction::ColumnReverse : Direction::Column;
-    return MakeNode<Panel>(
+    return MakeNode<Container>(
         dir,
         props.justify,
         props.align,

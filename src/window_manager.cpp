@@ -5,7 +5,6 @@
 
 #include <map>
 #include <mutex>
-#include <optional>
 #include <string>
 
 #include "assets.h"
@@ -19,10 +18,6 @@ struct Window {
     std::string title;
     Rectangle clientRect;
     bool resizable;
-    std::optional<DrawingHandler_t> drawHandler;
-    std::optional<CloseButtonHandler_t> closeHandler;
-    std::optional<PointerHandler_t> pointerHandler;
-    std::optional<KeyboardHandler_t> keyboardHandler;
 };
 
 static WindowHandle _handle_counter = 0;
@@ -37,10 +32,6 @@ WindowHandle WindowCreate() {
         .title = "New Window",
         .clientRect = {0, 0, 0, 0},
         .resizable = true,
-        .drawHandler = std::nullopt,
-        .closeHandler = std::nullopt,
-        .pointerHandler = std::nullopt,
-        .keyboardHandler = std::nullopt,
     };
 
     _window_map.emplace(window.handle, window);
@@ -77,38 +68,6 @@ void WindowSetResizable(WindowHandle handle, const bool resizable) {
 void WindowDestroy(WindowHandle handle) {
     std::lock_guard<std::mutex> lock(_window_mutex);
     _window_map.erase(handle);
-}
-
-void WindowSetHandlerForDrawing(
-    WindowHandle handle, std::optional<DrawingHandler_t> handler
-) {
-    std::lock_guard<std::mutex> lock(_window_mutex);
-    Window& window = _window_map.at(handle);
-    window.drawHandler = handler;
-}
-
-void WindowSetHandlerForCloseButton(
-    WindowHandle handle, std::optional<CloseButtonHandler_t> handler
-) {
-    std::lock_guard<std::mutex> lock(_window_mutex);
-    Window& window = _window_map.at(handle);
-    window.closeHandler = handler;
-}
-
-void WindowSetHandlerForPointer(
-    WindowHandle handle, std::optional<PointerHandler_t> handler
-) {
-    std::lock_guard<std::mutex> lock(_window_mutex);
-    Window& window = _window_map.at(handle);
-    window.pointerHandler = handler;
-}
-
-void WindowSetHandlerForKeyboard(
-    WindowHandle handle, std::optional<KeyboardHandler_t> handler
-) {
-    std::lock_guard<std::mutex> lock(_window_mutex);
-    Window& window = _window_map.at(handle);
-    window.keyboardHandler = handler;
 }
 
 namespace internal {
@@ -157,28 +116,26 @@ void Draw() {
             NEUTRAL_200
         );
 
-        if (true || window.closeHandler.has_value()) {
-            Rectangle closeButtonRect = {
-                window.clientRect.x + window.clientRect.width - 18 - 1,
-                window.clientRect.y + 1,
-                16,
-                14
-            };
-            // titlebar X
-            DrawRectangle(
-                closeButtonRect.x,
-                closeButtonRect.y,
-                closeButtonRect.width,
-                closeButtonRect.height,
-                RED
-            );
-            DrawTexture(
-                assets::WindowCloseButtonX,
-                closeButtonRect.x + 5,
-                closeButtonRect.y + 4,
-                WHITE
-            );
-        }
+        Rectangle closeButtonRect = {
+            window.clientRect.x + window.clientRect.width - 18 - 1,
+            window.clientRect.y + 1,
+            16,
+            14
+        };
+        // titlebar X
+        DrawRectangle(
+            closeButtonRect.x,
+            closeButtonRect.y,
+            closeButtonRect.width,
+            closeButtonRect.height,
+            RED
+        );
+        DrawTexture(
+            assets::WindowCloseButtonX,
+            closeButtonRect.x + 5,
+            closeButtonRect.y + 4,
+            WHITE
+        );
     }
 }
 

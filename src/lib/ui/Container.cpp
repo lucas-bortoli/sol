@@ -1,4 +1,4 @@
-#include "Panel.h"
+#include "Container.h"
 
 #include <algorithm>
 
@@ -22,7 +22,7 @@ bool RectEquals(const Rectangle& a, const Rectangle& b) {
 
 }  // namespace
 
-Panel::Panel(
+Container::Container(
     Direction initialDirection,
     Justify initialJustify,
     Align initialAlign,
@@ -39,13 +39,13 @@ Panel::Panel(
     for (auto& child : children) child->parent = this;
 }
 
-void Panel::AppendChild(std::unique_ptr<Widget> child) {
+void Container::AppendChild(std::unique_ptr<Widget> child) {
     child->parent = this;
     children.push_back(std::move(child));
     Invalidate();
 }
 
-float Panel::IntrinsicWidth() const {
+float Container::IntrinsicWidth() const {
     const bool horizontal = IsHorizontal(direction);
     float size = 0.0f;
     for (const auto& child : children) {
@@ -58,7 +58,7 @@ float Panel::IntrinsicWidth() const {
     return size + 2 * padding;
 }
 
-float Panel::IntrinsicHeight() const {
+float Container::IntrinsicHeight() const {
     const bool horizontal = IsHorizontal(direction);
     float size = 0.0f;
     for (const auto& child : children) {
@@ -72,7 +72,7 @@ float Panel::IntrinsicHeight() const {
     return size + 2 * padding;
 }
 
-void Panel::Layout(const Rectangle& bounds) {
+void Container::Layout(const Rectangle& bounds) {
     if (!layoutDirty && RectEquals(bounds, computedRect)) return;
 
     computedRect = bounds;
@@ -218,7 +218,12 @@ void Panel::Layout(const Rectangle& bounds) {
     layoutDirty = false;
 }
 
-void Panel::Draw() const {
+void Container::ProcessEvents() {
+    Widget::ProcessEvents();
+    for (auto& child : children) child->ProcessEvents();
+}
+
+void Container::Draw() const {
     for (const auto& child : children) child->Draw();
 }
 

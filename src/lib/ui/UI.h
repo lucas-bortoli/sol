@@ -6,6 +6,6 @@
 
 #include "Button.h"
 #include "Label.h"
-#include "Panel.h"
+#include "Container.h"
 #include "Tree.h"
 #include "Widget.h"

@@ -26,10 +26,6 @@ int main() {
 
     ui::Label* scoreValue = nullptr;
     ui::Label* levelValue = nullptr;
-    ui::Button* decrementButton = nullptr;
-    ui::Button* resetButton = nullptr;
-    ui::Button* incrementButton = nullptr;
-    ui::Button* levelUpButton = nullptr;
 
     std::unique_ptr<ui::Widget> ui_root = ui::Column(
         {.gap = 6, .padding = 8},
@@ -46,28 +42,15 @@ int main() {
         ),
         ui::Row(
             {.gap = 4},
-            ui::Btn("-1").Ref(decrementButton).Grow(1),
-            ui::Btn("Reset").Ref(resetButton).Grow(1),
-            ui::Btn("+1").Ref(incrementButton).Grow(1)
+            ui::Btn("-1").OnClick([&score] { score--; }).Grow(1),
+            ui::Btn("Reset").OnClick([&score] { score = 0; }).Grow(1),
+            ui::Btn("+1").OnClick([&score] { score++; }).Grow(1)
         ),
-        ui::Btn("Level Up").Ref(levelUpButton)
+        ui::Btn("Level Up").OnClick([&level] { level++; })
     );
 
     while (!WindowShouldClose()) {
-        bool clicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
         auto mousePos = GetMousePosition();
-        auto Hit = [&](ui::Button* button) {
-            return clicked && button != nullptr &&
-                   CheckCollisionPointRec(mousePos, button->GetComputedRect());
-        };
-
-        if (Hit(decrementButton)) score--;
-        if (Hit(resetButton)) score = 0;
-        if (Hit(incrementButton)) score++;
-        if (Hit(levelUpButton)) level++;
-
-        scoreValue->SetText(std::to_string(score));
-        levelValue->SetText(std::to_string(level));
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
@@ -75,6 +58,11 @@ int main() {
         wm::internal::Draw();
 
         Rectangle windowContent = {16 + 4, 16 + 18, 260 - 8, 190 - 22};
+        ui_root->ProcessEvents();
+
+        scoreValue->SetText(std::to_string(score));
+        levelValue->SetText(std::to_string(level));
+
         ui_root->Layout(windowContent);
         ui_root->Draw();
 

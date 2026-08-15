@@ -21,7 +21,7 @@ add_executable(rocketship
     src/assets.cpp
     src/lib/ui/Utils.cpp
     src/lib/ui/Widget.cpp
-    src/lib/ui/Panel.cpp
+    src/lib/ui/Container.cpp
     src/lib/ui/Label.cpp
     src/lib/ui/Button.cpp
 )

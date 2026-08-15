@@ -8,9 +8,9 @@
 
 namespace ui {
 
-/// A clickable rectangle with a text label and border/shadow chrome.
-/// Doesn't handle input itself yet — callers hit-test against
-/// GetComputedRect() (see main.cpp for an example).
+/// A clickable rectangle with a text label and border/shadow chrome. Use
+/// SetOnClick()/SetOnHoverChange() (inherited from Widget) to react to
+/// input.
 class Button : public Widget {
    public:
     explicit Button(std::string initialText);

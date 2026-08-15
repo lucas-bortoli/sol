@@ -33,10 +33,7 @@ void Button::Layout(const Rectangle& bounds) {
 void Button::Draw() const {
     auto computedRect = this->GetComputedRect();
 
-    bool isBeingClicked = IsMouseButtonDown(MOUSE_BUTTON_LEFT) &&
-                           CheckCollisionPointRec(
-                               GetMousePosition(), computedRect
-                           );
+    bool isBeingClicked = pointerDown;
 
     Rectangle drawnRect = computedRect;
 

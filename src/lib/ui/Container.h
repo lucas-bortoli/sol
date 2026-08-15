@@ -9,12 +9,12 @@
 
 namespace ui {
 
-/// Axis a Panel's children are laid out along, and which end is "first".
+/// Axis a Container's children are laid out along, and which end is "first".
 /// Mirrors CSS flex-direction.
 enum class Direction { Row, RowReverse, Column, ColumnReverse };
 
 /// How leftover main-axis space (after grow/shrink) is distributed between
-/// a Panel's children. Mirrors CSS justify-content.
+/// a Container's children. Mirrors CSS justify-content.
 enum class Justify {
     Start,
     End,
@@ -36,12 +36,12 @@ enum class Align { Start, End, Center, Stretch };
 /// Not built directly — use the Row()/Column() tree-literal functions in
 /// Tree.h, which own child-list construction and keep the declarative call
 /// shape.
-class Panel : public Widget {
+class Container : public Widget {
    public:
     /// Takes ownership of initialChildren and sets each one's parent to
-    /// this Panel. Prefer building via Row()/Column() rather than calling
+    /// this Container. Prefer building via Row()/Column() rather than calling
     /// this directly.
-    Panel(
+    Container(
         Direction initialDirection,
         Justify initialJustify,
         Align initialAlign,
@@ -55,6 +55,7 @@ class Panel : public Widget {
     void AppendChild(std::unique_ptr<Widget> child);
 
     void Layout(const Rectangle& bounds) override;
+    void ProcessEvents() override;
     void Draw() const override;
 
    protected:
