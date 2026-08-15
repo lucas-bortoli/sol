@@ -1,12 +1,33 @@
 #include "Widget.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace ui {
 
 namespace {
 Widget* g_focusedWidget = nullptr;
 }  // namespace
+
+bool IsKeyRepeated(int key, float& heldSeconds, float delay, float interval) {
+    if (IsKeyPressed(key)) {
+        heldSeconds = 0.0f;
+        return true;
+    }
+    if (!IsKeyDown(key)) {
+        heldSeconds = 0.0f;
+        return false;
+    }
+
+    float previous = heldSeconds;
+    heldSeconds += GetFrameTime();
+    if (previous < delay) {
+        return heldSeconds >= delay;
+    }
+    float previousTicks = floorf((previous - delay) / interval);
+    float currentTicks = floorf((heldSeconds - delay) / interval);
+    return currentTicks > previousTicks;
+}
 
 Widget::~Widget() {
     if (g_focusedWidget == this) g_focusedWidget = nullptr;
@@ -121,7 +142,21 @@ void Widget::CollectFocusable(std::vector<Widget*>& out) {
 }
 
 void Widget::ProcessKeyboardFocus(Widget& root) {
-    if (IsKeyPressed(KEY_TAB)) {
+    // main.cpp calls this once per window tree, so it can run more than
+    // once within the same real frame. tabHeldSeconds must only accumulate
+    // GetFrameTime() once per frame regardless of call count, or repeat
+    // speed would scale with the number of trees — cache the decision by
+    // GetTime() (changes once per real frame) and reuse it for any extra
+    // calls that land in the same frame.
+    static float tabHeldSeconds = 0.0f;
+    static double lastTabCheckTime = -1.0;
+    static bool tabRepeatedThisFrame = false;
+    double now = GetTime();
+    if (now != lastTabCheckTime) {
+        lastTabCheckTime = now;
+        tabRepeatedThisFrame = IsKeyRepeated(KEY_TAB, tabHeldSeconds);
+    }
+    if (tabRepeatedThisFrame) {
         std::vector<Widget*> focusableWidgets;
         root.CollectFocusable(focusableWidgets);
         if (!focusableWidgets.empty()) {
@@ -162,11 +197,9 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
     }
 
     // Raw key press/down/up bookkeeping for the focused widget. Drains
-    // GetKeyPressed()'s frame-scoped queue exactly once (same reasoning as
-    // KEY_TAB above — must happen from this single per-frame call, not from
-    // per-widget ProcessEvents()), then walks the widget's own heldKeys to
-    // fire onKeyDown every frame a key stays held and onKeyUp the frame it's
-    // released.
+    // GetKeyPressed()'s frame-scoped queue exactly once, then walks the
+    // widget's own heldKeys to fire onKeyDown every frame a key stays held
+    // and onKeyUp the frame it's released.
     if (g_focusedWidget) {
         Widget& focusedWidget = *g_focusedWidget;
         int key;

@@ -98,15 +98,15 @@ void TextBox::ProcessEvents() {
         InsertCodepoint(utf8, byteCount);
     }
 
-    if (IsKeyPressed(KEY_BACKSPACE)) DeleteBackward();
-    if (IsKeyPressed(KEY_DELETE)) DeleteForward();
-    if (IsKeyPressed(KEY_LEFT)) MoveCaret(-1);
-    if (IsKeyPressed(KEY_RIGHT)) MoveCaret(1);
-    if (IsKeyPressed(KEY_HOME)) {
+    if (IsKeyRepeated(KEY_BACKSPACE, backspaceHeldSeconds)) DeleteBackward();
+    if (IsKeyRepeated(KEY_DELETE, deleteHeldSeconds)) DeleteForward();
+    if (IsKeyRepeated(KEY_LEFT, leftHeldSeconds)) MoveCaret(-1);
+    if (IsKeyRepeated(KEY_RIGHT, rightHeldSeconds)) MoveCaret(1);
+    if (IsKeyRepeated(KEY_HOME, homeHeldSeconds)) {
         caretByteIndex = 0;
         blinkTimer = 0.0f;
     }
-    if (IsKeyPressed(KEY_END)) {
+    if (IsKeyRepeated(KEY_END, endHeldSeconds)) {
         caretByteIndex = text.size();
         blinkTimer = 0.0f;
     }

@@ -10,10 +10,11 @@ namespace ui {
 
 /// A single-line, UTF-8 text input. Click (or Tab) to focus, then type to
 /// insert; Backspace/Delete remove one codepoint at a time, Left/Right move
-/// the caret one codepoint, Home/End jump to the start/end. No selection,
-/// no clipboard, no multi-line/wrap, no IME composition, no key-repeat on
-/// a held key (each press moves/deletes once). Content that overflows the
-/// box's width scrolls horizontally to keep the caret visible.
+/// the caret one codepoint, Home/End jump to the start/end. Holding any of
+/// these repeats it after a short delay, like a standard OS text field. No
+/// selection, no clipboard, no multi-line/wrap, no IME composition.
+/// Content that overflows the box's width scrolls horizontally to keep the
+/// caret visible.
 class TextBox : public Widget {
    public:
     /// `initialText` seeds the box's contents; the caret starts at the end
@@ -53,6 +54,16 @@ class TextBox : public Widget {
     std::string text;
     size_t caretByteIndex = 0;
     float blinkTimer = 0.0f;
+
+    // Per-key held-duration state for IsKeyRepeated (see Widget.h) — one
+    // slot per repeatable editing key, since each must track its own hold
+    // time independently.
+    float backspaceHeldSeconds = 0.0f;
+    float deleteHeldSeconds = 0.0f;
+    float leftHeldSeconds = 0.0f;
+    float rightHeldSeconds = 0.0f;
+    float homeHeldSeconds = 0.0f;
+    float endHeldSeconds = 0.0f;
 
     /// Horizontal scroll offset in pixels, recomputed every Draw() call
     /// from computedRect/caret position — a draw-time cache, not model

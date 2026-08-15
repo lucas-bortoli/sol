@@ -191,4 +191,16 @@ class Widget {
     void ReleaseAllKeys();
 };
 
+/// Standard OS-style press-then-repeat timing: true on the initial press of
+/// `key` (the IsKeyPressed edge), then true again every `interval` seconds
+/// once `key` has been held for at least `delay` seconds. `heldSeconds` is
+/// caller-owned state — the same variable must be passed in every frame for
+/// a given key/widget pairing — and self-resets to 0 once the key is no
+/// longer down, so releasing and re-pressing restarts the delay. Used for
+/// things like Tab-cycling and TextBox editing keys, where a single
+/// IsKeyPressed() only fires once per physical press.
+bool IsKeyRepeated(
+    int key, float& heldSeconds, float delay = 0.4f, float interval = 0.05f
+);
+
 }  // namespace ui
