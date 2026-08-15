@@ -29,6 +29,21 @@ enum class Justify {
 /// cross-axis size.
 enum class Align { Start, End, Center, Stretch };
 
+/// Whether a Container clips and shrinks its children to fit (Visible, the
+/// default — matches today's behavior) or lets main-axis content overflow
+/// and become scrollable behind a thin overlay scrollbar (Scroll). Mirrors
+/// CSS overflow, restricted to the container's main axis.
+enum class Overflow { Visible, Scroll };
+
+/// Per-side padding for a Container's content, in px. Mirrors CSS
+/// padding-top/-right/-bottom/-left.
+struct Padding {
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+    float left = 0.0f;
+};
+
 /// A flexbox-style container: lays children out along a main axis
 /// (Direction) and distributes/aligns them per Justify/Align, honoring each
 /// child's grow/shrink factors and fixed sizes.
@@ -46,7 +61,8 @@ class Container : public Widget {
         Justify initialJustify,
         Align initialAlign,
         float initialGap,
-        float initialPadding,
+        Padding initialPadding,
+        Overflow initialOverflow,
         std::vector<std::unique_ptr<Widget>> initialChildren
     );
 
@@ -68,9 +84,38 @@ class Container : public Widget {
     Justify justify;
     Align align;
     float gap;
-    float padding;
+    Padding padding;
+    Overflow overflow;
+
+    // Overflow::Scroll state. Mutable: derived draw/scroll state recomputed
+    // from Layout(), not model state — same rationale as TextArea's
+    // scrollOffsetRows/scrollOffsetXPx.
+    mutable float scrollOffsetPx = 0.0f;
+    mutable float contentMainSize = 0.0f;
+    mutable float viewportMainSize = 0.0f;
+    mutable bool draggingThumb = false;
+    mutable float dragStartMouseMain = 0.0f;
+    mutable float dragStartScrollOffsetPx = 0.0f;
 
     std::vector<std::unique_ptr<Widget>> children;
+
+    /// Whether content currently overflows the viewport on the main axis —
+    /// the gate for scissor clipping, wheel/drag handling, and drawing the
+    /// scrollbar thumb.
+    bool IsOverflowing() const;
+
+    /// Track/thumb length in px and max scroll range, shared by ThumbRect()
+    /// and the drag-to-scroll math in ProcessEvents().
+    struct ThumbMetrics {
+        float trackLen;
+        float thumbLen;
+        float maxScroll;
+    };
+    ThumbMetrics ComputeThumbMetrics() const;
+    /// Computed thumb rectangle in screen space, valid only when
+    /// IsOverflowing() — used by both ProcessEvents() (hit-testing drag)
+    /// and Draw() (painting).
+    Rectangle ThumbRect() const;
 };
 
 }  // namespace ui

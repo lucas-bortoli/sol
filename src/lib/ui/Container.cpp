@@ -1,5 +1,7 @@
 #include "Container.h"
 
+#include "../../palette.h"
+
 #include <algorithm>
 
 namespace ui {
@@ -27,7 +29,8 @@ Container::Container(
     Justify initialJustify,
     Align initialAlign,
     float initialGap,
-    float initialPadding,
+    Padding initialPadding,
+    Overflow initialOverflow,
     std::vector<std::unique_ptr<Widget>> initialChildren
 )
     : direction(initialDirection),
@@ -35,6 +38,7 @@ Container::Container(
       align(initialAlign),
       gap(initialGap),
       padding(initialPadding),
+      overflow(initialOverflow),
       children(std::move(initialChildren)) {
     for (auto& child : children) child->parent = this;
 }
@@ -55,7 +59,7 @@ float Container::IntrinsicWidth() const {
     if (horizontal && children.size() > 1) {
         size += gap * (children.size() - 1);
     }
-    return size + 2 * padding;
+    return size + padding.left + padding.right;
 }
 
 float Container::IntrinsicHeight() const {
@@ -69,7 +73,7 @@ float Container::IntrinsicHeight() const {
     if (!horizontal && children.size() > 1) {
         size += gap * (children.size() - 1);
     }
-    return size + 2 * padding;
+    return size + padding.top + padding.bottom;
 }
 
 void Container::Layout(const Rectangle& bounds) {
@@ -87,10 +91,10 @@ void Container::Layout(const Rectangle& bounds) {
     const bool reversed = IsReversed(direction);
 
     const Rectangle content = {
-        bounds.x + padding,
-        bounds.y + padding,
-        std::max(0.0f, bounds.width - 2 * padding),
-        std::max(0.0f, bounds.height - 2 * padding),
+        bounds.x + padding.left,
+        bounds.y + padding.top,
+        std::max(0.0f, bounds.width - padding.left - padding.right),
+        std::max(0.0f, bounds.height - padding.top - padding.bottom),
     };
 
     const float mainSize = horizontal ? content.width : content.height;
@@ -118,13 +122,15 @@ void Container::Layout(const Rectangle& bounds) {
     const float totalGap = n > 1 ? gap * (n - 1) : 0.0f;
     const float delta = mainSize - totalBase - totalGap;
 
-    // 2. Grow to fill extra space, or shrink to fit an overflow.
+    // 2. Grow to fill extra space, or shrink to fit an overflow — unless
+    // Overflow::Scroll is letting content overflow instead of shrinking.
+    const bool letOverflow = overflow == Overflow::Scroll && delta < 0;
     std::vector<float> finalMain = baseMain;
     if (delta > 0 && totalGrow > 0) {
         for (size_t i = 0; i < n; i++) {
             finalMain[i] += delta * (children[i]->growFactor / totalGrow);
         }
-    } else if (delta < 0 && totalShrink > 0) {
+    } else if (delta < 0 && totalShrink > 0 && !letOverflow) {
         for (size_t i = 0; i < n; i++) {
             float weight = children[i]->shrinkFactor * baseMain[i];
             float shrinkAmount = -delta * (weight / totalShrink);
@@ -132,14 +138,27 @@ void Container::Layout(const Rectangle& bounds) {
         }
     }
 
+    contentMainSize = totalGap;
+    for (float f : finalMain) contentMainSize += f;
+    viewportMainSize = mainSize;
+    if (overflow == Overflow::Scroll) {
+        float maxScroll = std::max(0.0f, contentMainSize - mainSize);
+        scrollOffsetPx = std::clamp(scrollOffsetPx, 0.0f, maxScroll);
+    } else {
+        scrollOffsetPx = 0.0f;
+    }
+
     // 3. Whatever space grow/shrink didn't consume is left for `justify`.
     float usedMain = totalGap;
     for (float f : finalMain) usedMain += f;
     const float leftover = std::max(0.0f, mainSize - usedMain);
 
-    float cursor = 0.0f;
+    float cursor = letOverflow ? -scrollOffsetPx : 0.0f;
     float justifyGap = gap;
-    switch (justify) {
+    // Overflowing content ignores justify entirely — there's no leftover
+    // space to distribute, and cursor must stay anchored to the scroll
+    // offset rather than being recentered/reversed by the switch below.
+    switch (letOverflow ? Justify::Start : justify) {
         case Justify::Start:
             break;
         case Justify::End:
@@ -218,8 +237,102 @@ void Container::Layout(const Rectangle& bounds) {
     layoutDirty = false;
 }
 
+namespace {
+constexpr float kThumbThickness = 6.0f;
+constexpr float kThumbMargin = 2.0f;
+constexpr float kThumbMinLength = 20.0f;
+constexpr float kWheelPxPerNotch = 40.0f;
+}  // namespace
+
+bool Container::IsOverflowing() const {
+    return overflow == Overflow::Scroll &&
+           contentMainSize > viewportMainSize + 0.5f;
+}
+
+Container::ThumbMetrics Container::ComputeThumbMetrics() const {
+    const bool horizontal = IsHorizontal(direction);
+    float trackLen =
+        (horizontal ? computedRect.width : computedRect.height) -
+        2 * kThumbMargin;
+    float thumbLen = trackLen;
+    if (contentMainSize > 0.0f) {
+        thumbLen = std::max(
+            kThumbMinLength, trackLen * (viewportMainSize / contentMainSize)
+        );
+    }
+    thumbLen = std::min(thumbLen, trackLen);
+    float maxScroll = std::max(0.0f, contentMainSize - viewportMainSize);
+    return {trackLen, thumbLen, maxScroll};
+}
+
+Rectangle Container::ThumbRect() const {
+    const bool horizontal = IsHorizontal(direction);
+    ThumbMetrics m = ComputeThumbMetrics();
+    float freeTrack = m.trackLen - m.thumbLen;
+    float trackPos =
+        m.maxScroll > 0.0f ? freeTrack * (scrollOffsetPx / m.maxScroll) : 0.0f;
+
+    if (horizontal) {
+        return Rectangle{
+            computedRect.x + kThumbMargin + trackPos,
+            computedRect.y + computedRect.height - kThumbThickness -
+                kThumbMargin,
+            m.thumbLen, kThumbThickness
+        };
+    }
+    return Rectangle{
+        computedRect.x + computedRect.width - kThumbThickness - kThumbMargin,
+        computedRect.y + kThumbMargin + trackPos, kThumbThickness, m.thumbLen
+    };
+}
+
 void Container::ProcessEvents() {
     Widget::ProcessEvents();
+
+    if (IsOverflowing()) {
+        const bool horizontal = IsHorizontal(direction);
+        Vector2 mouse = GetMousePosition();
+        float mouseMain = horizontal ? mouse.x : mouse.y;
+
+        if (draggingThumb) {
+            if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+                ThumbMetrics m = ComputeThumbMetrics();
+                float freeTrack = m.trackLen - m.thumbLen;
+                float scale =
+                    freeTrack > 0.0f ? m.maxScroll / freeTrack : 0.0f;
+                float newOffset = std::clamp(
+                    dragStartScrollOffsetPx +
+                        (mouseMain - dragStartMouseMain) * scale,
+                    0.0f, m.maxScroll
+                );
+                if (newOffset != scrollOffsetPx) {
+                    scrollOffsetPx = newOffset;
+                    Invalidate();
+                }
+            } else {
+                draggingThumb = false;
+            }
+        } else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
+                   CheckCollisionPointRec(mouse, ThumbRect())) {
+            draggingThumb = true;
+            dragStartMouseMain = mouseMain;
+            dragStartScrollOffsetPx = scrollOffsetPx;
+        } else if (CheckCollisionPointRec(mouse, computedRect)) {
+            float wheel = GetMouseWheelMove();
+            if (wheel != 0.0f) {
+                ThumbMetrics m = ComputeThumbMetrics();
+                float newOffset = std::clamp(
+                    scrollOffsetPx - wheel * kWheelPxPerNotch, 0.0f,
+                    m.maxScroll
+                );
+                if (newOffset != scrollOffsetPx) {
+                    scrollOffsetPx = newOffset;
+                    Invalidate();
+                }
+            }
+        }
+    }
+
     for (auto& child : children) child->ProcessEvents();
 }
 
@@ -229,7 +342,22 @@ void Container::CollectFocusable(std::vector<Widget*>& out) {
 }
 
 void Container::Draw() const {
+    bool overflowing = IsOverflowing();
+    if (overflowing) {
+        BeginScissorMode(
+            static_cast<int>(computedRect.x), static_cast<int>(computedRect.y),
+            static_cast<int>(computedRect.width),
+            static_cast<int>(computedRect.height)
+        );
+    }
+
     for (const auto& child : children) child->Draw();
+
+    if (overflowing) {
+        EndScissorMode();
+        Rectangle thumb = ThumbRect();
+        DrawRectangleRounded(thumb, 0.5f, 4, Fade(NEUTRAL_600, 0.5f));
+    }
 }
 
 }  // namespace ui

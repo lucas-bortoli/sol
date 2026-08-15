@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -9,6 +10,7 @@
 #include "Button.h"
 #include "Container.h"
 #include "Label.h"
+#include "Spacer.h"
 #include "TextArea.h"
 #include "TextBox.h"
 #include "Widget.h"
@@ -162,15 +164,43 @@ inline Node<TextArea> Textarea(std::string initialText = "") {
     return MakeNode<TextArea>(std::move(initialText));
 }
 
+/// Tree-literal factory for a Spacer, e.g. Space().Grow(1) to push later
+/// siblings to the far end of a Row/Column. Named Space() rather than
+/// Spacer() so it doesn't shadow the ui::Spacer class name (a function and
+/// a class sharing a name in the same scope makes the class inaccessible
+/// via unqualified lookup thereafter).
+inline Node<Spacer> Space() { return MakeNode<Spacer>(); }
+
 /// Designated-initializer property bag for Row()/Column(), e.g.
 /// Row({.justify = Justify::SpaceBetween, .gap = 4}, ...).
 struct ContainerProps {
     Justify justify = Justify::Start;
     Align align = Align::Stretch;
     float gap = 0.0f;
+    /// Uniform padding shorthand, applied to any side not overridden below
+    /// (CSS `padding: Npx` shorthand).
     float padding = 0.0f;
+    std::optional<float> paddingTop;
+    std::optional<float> paddingRight;
+    std::optional<float> paddingBottom;
+    std::optional<float> paddingLeft;
     bool reverse = false;
+    /// Overflow::Visible (default) keeps today's shrink-to-fit behavior.
+    /// Overflow::Scroll lets main-axis content overflow behind a clipped,
+    /// scrollable, overlay-scrollbar viewport instead.
+    Overflow overflow = Overflow::Visible;
 };
+
+/// Resolves a ContainerProps' padding fields (uniform shorthand + per-side
+/// overrides) into the four concrete values Container's constructor wants.
+inline Padding ResolvePadding(const ContainerProps& props) {
+    return Padding{
+        props.paddingTop.value_or(props.padding),
+        props.paddingRight.value_or(props.padding),
+        props.paddingBottom.value_or(props.padding),
+        props.paddingLeft.value_or(props.padding),
+    };
+}
 
 /// Tree-literal factory for a Row-direction Container (or RowReverse, via
 /// props.reverse). See the tree-literal example above.
@@ -182,7 +212,8 @@ Node<Container> Row(ContainerProps props, NodesT&&... children) {
         props.justify,
         props.align,
         props.gap,
-        props.padding,
+        ResolvePadding(props),
+        props.overflow,
         Children(std::forward<NodesT>(children)...)
     );
 }
@@ -198,7 +229,8 @@ Node<Container> Column(ContainerProps props, NodesT&&... children) {
         props.justify,
         props.align,
         props.gap,
-        props.padding,
+        ResolvePadding(props),
+        props.overflow,
         Children(std::forward<NodesT>(children)...)
     );
 }

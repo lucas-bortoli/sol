@@ -23,6 +23,7 @@ add_executable(rocketship
     src/lib/ui/Widget.cpp
     src/lib/ui/Container.cpp
     src/lib/ui/Label.cpp
+    src/lib/ui/Spacer.cpp
     src/lib/ui/Button.cpp
     src/lib/ui/TextBox.cpp
     src/lib/ui/Utf8.cpp

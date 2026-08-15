@@ -31,6 +31,11 @@ int main() {
     wm::WindowSetPosition(myWindow3, {16, 220});
     wm::WindowSetTitle(myWindow3, "Notes");
 
+    auto myWindow4 = wm::WindowCreate();
+    wm::WindowSetSize(myWindow4, {200, 180});
+    wm::WindowSetPosition(myWindow4, {300, 180});
+    wm::WindowSetTitle(myWindow4, "Scroll Test");
+
     int score = 0;
     int level = 1;
 
@@ -83,6 +88,49 @@ int main() {
             .Grow(0)
     );
 
+    std::unique_ptr<ui::Widget> ui_root4 = ui::Column(
+        {.gap = 4, .padding = 0},
+        ui::Text("Scroll with mouse wheel or drag the thumb").Shrink(0),
+        ui::Column(
+            {.gap = 4, .overflow = ui::Overflow::Scroll},
+            ui::Text("Item 1"),
+            ui::Text("Item 2"),
+            ui::Text("Item 3"),
+            ui::Text("Item 4"),
+            ui::Text("Item 5"),
+            ui::Text("Item 6"),
+            ui::Text("Item 7"),
+            ui::Text("Item 8"),
+            ui::Text("Item 9"),
+            ui::Text("Item 10"),
+            ui::Text("Item 11"),
+            ui::Text("Item 12"),
+            ui::Text("Item 13"),
+            ui::Text("Item 14"),
+            ui::Text("Item 15"),
+            ui::Text("Item 16"),
+            ui::Text("Item 17"),
+            ui::Text("Item 18"),
+            ui::Text("Item 19"),
+            ui::Text("Item 20")
+        )
+            .Grow(1),
+        ui::Row(
+            {.gap = 4,
+             .paddingBottom = 12.0f,
+             .overflow = ui::Overflow::Scroll},
+            ui::Btn("One"),
+            ui::Btn("Two"),
+            ui::Btn("Three"),
+            ui::Btn("Four"),
+            ui::Btn("Five"),
+            ui::Btn("Six"),
+            ui::Btn("Seven"),
+            ui::Btn("Eight")
+        )
+            .Shrink(0)
+    );
+
     while (!WindowShouldClose()) {
         auto mousePos = GetMousePosition();
 
@@ -115,6 +163,13 @@ int main() {
         ui_root3->Layout(windowContent3);
         ui_root3->Draw();
 
+        Rectangle windowContent4 = {300 + 4, 180 + 18, 200 - 8, 180 - 22};
+        ui_root4->ProcessEvents();
+        ui::Widget::ProcessKeyboardFocus(*ui_root4);
+
+        ui_root4->Layout(windowContent4);
+        ui_root4->Draw();
+
         // lastly: the cursor
         if (IsCursorOnScreen()) {
             DrawTexture(assets::CursorDefault, mousePos.x, mousePos.y, WHITE);
@@ -127,6 +182,7 @@ int main() {
     wm::WindowDestroy(myWindow);
     wm::WindowDestroy(myWindow2);
     wm::WindowDestroy(myWindow3);
+    wm::WindowDestroy(myWindow4);
 
     wm::internal::Cleanup();
     assets::Cleanup();
