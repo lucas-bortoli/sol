@@ -11,9 +11,13 @@ namespace ui {
 
 /// A single-line, UTF-8 text input. Click (or Tab) to focus; clicking also
 /// places the caret at the nearest character boundary to the click, and
-/// dragging while held selects. Shift+Left/Right/Home/End extend a
-/// selection from the keyboard; Ctrl+A/C/X/V select-all/copy/cut/paste.
-/// Type to insert (replacing any active selection); Backspace/Delete
+/// dragging while held selects. Double-click selects the word (or
+/// whitespace/punctuation run) under the pointer; triple-click selects
+/// everything (there's only one line). Continuing to drag after a double-
+/// click extends the selection a whole word at a time. Shift+Left/Right/
+/// Home/End extend a selection from the keyboard; Ctrl+A/C/X/V select-
+/// all/copy/cut/paste. Type to insert (replacing any active selection);
+/// Backspace/Delete
 /// remove one codepoint at a time, or the selection if one exists;
 /// Left/Right move the caret one codepoint, Home/End jump to the
 /// start/end. Holding any of these repeats it after a short delay, like a
@@ -93,6 +97,31 @@ class TextBox : public Widget {
     /// pressOrigin/pointerDown, which drive focus-claiming and the pressed
     /// visual, not selection.
     bool isDraggingSelection = false;
+
+    /// GetTime() timestamp of the last mouse press inside this box, used
+    /// (together with lastClickByteIndex) to detect a double/triple-click
+    /// sequence: a press within kMultiClickIntervalSeconds of the previous
+    /// one, at the same character, increments clickCount instead of
+    /// resetting it.
+    double lastClickTime = 0.0;
+    /// caretByteIndex at the time of the last press, for the same-position
+    /// check described above.
+    size_t lastClickByteIndex = 0;
+    /// How many consecutive same-position clicks have landed so far this
+    /// sequence (1 = single click). Reset to 1 by any click that doesn't
+    /// qualify as a continuation of the previous one.
+    int clickCount = 0;
+    /// clickCount for the *current* press-drag, capped at 3 (1 = char,
+    /// 2 = word, 3 = select-all) — captured once when the press happens
+    /// so a drag keeps using the same unit even if, hypothetically,
+    /// clickCount changed mid-drag.
+    int activeSelectUnit = 1;
+    /// The word (activeSelectUnit == 2) or, for a triple-click, the whole
+    /// text range, captured at press time — dragging extends the
+    /// selection outward from whichever edge of this range is on the far
+    /// side of the pointer, so a word/line stays a whole unit as you drag
+    /// past further ones instead of being clipped mid-word.
+    ByteRange dragAnchorRange{0, 0};
 
     // Per-key held-duration state for IsKeyRepeated (see Widget.h) — one
     // slot per repeatable editing key, since each must track its own hold

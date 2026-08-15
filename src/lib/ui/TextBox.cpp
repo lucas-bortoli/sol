@@ -142,12 +142,58 @@ void TextBox::ProcessEvents() {
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
         CheckCollisionPointRec(GetMousePosition(), GetComputedRect())) {
         PlaceCaretAtMouse(GetMousePosition());
-        selectionAnchor = caretByteIndex;
+
+        // Double/triple-click detection: a press at the same character as
+        // the previous one, within kMultiClickIntervalSeconds, continues
+        // the sequence instead of starting a fresh single click.
+        double now = GetTime();
+        if (clickCount > 0 &&
+            now - lastClickTime <= kMultiClickIntervalSeconds &&
+            caretByteIndex == lastClickByteIndex) {
+            clickCount++;
+        } else {
+            clickCount = 1;
+        }
+        lastClickTime = now;
+        lastClickByteIndex = caretByteIndex;
+        activeSelectUnit = clickCount > 3 ? 3 : clickCount;
+
+        if (activeSelectUnit == 2) {
+            dragAnchorRange = WordRangeAt(text, caretByteIndex);
+            selectionAnchor = dragAnchorRange.start;
+            caretByteIndex = dragAnchorRange.end;
+        } else if (activeSelectUnit == 3) {
+            // TextBox is single-line, so "select the line" is just
+            // "select everything".
+            dragAnchorRange = {0, text.size()};
+            selectionAnchor = dragAnchorRange.start;
+            caretByteIndex = dragAnchorRange.end;
+        } else {
+            dragAnchorRange = {caretByteIndex, caretByteIndex};
+            selectionAnchor = caretByteIndex;
+        }
         isDraggingSelection = true;
     }
     if (isDraggingSelection) {
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
             PlaceCaretAtMouse(GetMousePosition());
+            if (activeSelectUnit == 2) {
+                // Word-wise drag: extend outward from whichever edge of
+                // the originally-clicked word is on the far side of the
+                // pointer, so dragging past further words selects them
+                // whole rather than clipping mid-word.
+                ByteRange hoverWord = WordRangeAt(text, caretByteIndex);
+                if (caretByteIndex >= dragAnchorRange.start) {
+                    selectionAnchor = dragAnchorRange.start;
+                    caretByteIndex = hoverWord.end;
+                } else {
+                    selectionAnchor = dragAnchorRange.end;
+                    caretByteIndex = hoverWord.start;
+                }
+            } else if (activeSelectUnit == 3) {
+                selectionAnchor = 0;
+                caretByteIndex = text.size();
+            }
         } else {
             isDraggingSelection = false;
         }

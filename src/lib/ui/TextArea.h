@@ -25,9 +25,10 @@ enum class TextAreaWrapMode {
 
 /// A multi-line, UTF-8, word/character/no-wrap text input. Behaves like
 /// TextBox (click/Tab to focus, click-to-place-caret and click-drag to
-/// select, Shift+arrows/Home/End to extend a selection, Ctrl+A/C/X/V,
-/// insert/Backspace/Delete/Left/Right/Home/End with press-then-repeat)
-/// extended to two dimensions: Up/Down move the caret between visual lines
+/// select — double-click a word, triple-click a line, and dragging after
+/// either extends the selection a whole word/line at a time — Shift+
+/// arrows/Home/End to extend a selection, Ctrl+A/C/X/V) extended to two
+/// dimensions: Up/Down move the caret between visual lines
 /// with "sticky column" behavior (and, like Home/End, collapse a selection
 /// rather than moving relative to the caret when not held with Shift),
 /// Home/End target the current visual line (not the whole text), and
@@ -173,6 +174,30 @@ class TextArea : public Widget {
     /// pressOrigin/pointerDown, which drive focus-claiming and the pressed
     /// visual, not selection.
     bool isDraggingSelection = false;
+
+    /// GetTime() timestamp of the last mouse press inside this box, used
+    /// (together with lastClickByteIndex) to detect a double/triple-click
+    /// sequence: a press within kMultiClickIntervalSeconds of the previous
+    /// one, at the same character, increments clickCount instead of
+    /// resetting it.
+    double lastClickTime = 0.0;
+    /// caretByteIndex at the time of the last press, for the same-position
+    /// check described above.
+    size_t lastClickByteIndex = 0;
+    /// How many consecutive same-position clicks have landed so far this
+    /// sequence (1 = single click). Reset to 1 by any click that doesn't
+    /// qualify as a continuation of the previous one.
+    int clickCount = 0;
+    /// clickCount for the *current* press-drag, capped at 3 (1 = char,
+    /// 2 = word, 3 = line) — captured once when the press happens so a
+    /// drag keeps using the same unit for its whole duration.
+    int activeSelectUnit = 1;
+    /// The word or line (activeSelectUnit == 2 or 3) captured at press
+    /// time — dragging extends the selection outward from whichever edge
+    /// of this range is on the far side of the pointer, so a word/line
+    /// stays a whole unit as you drag past further ones instead of being
+    /// clipped mid-word/mid-line.
+    ByteRange dragAnchorRange{0, 0};
 
     // Per-key held-duration state for IsKeyRepeated (see Widget.h) — one
     // slot per repeatable key, since each must track its own hold time
