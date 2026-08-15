@@ -13,11 +13,13 @@ TextArea::TextArea(std::string initialText, TextAreaWrapMode initialWrapMode)
     : text(std::move(initialText)), wrapMode(initialWrapMode) {
     focusable = true;
     caretByteIndex = text.size();
+    selectionAnchor = caretByteIndex;
 }
 
 void TextArea::SetText(std::string newText) {
     text = std::move(newText);
     caretByteIndex = text.size();
+    selectionAnchor = caretByteIndex;
     visualLinesDirty = true;
     desiredColumnDirty = true;
     Invalidate();
@@ -151,6 +153,45 @@ void TextArea::MoveCaret(int direction) {
     }
     blinkTimer = 0.0f;
     desiredColumnDirty = true;
+}
+
+void TextArea::DeleteSelection() {
+    if (!HasSelection()) return;
+    ByteRange range = SelectionRange();
+    text.erase(range.start, range.end - range.start);
+    caretByteIndex = range.start;
+    selectionAnchor = range.start;
+    blinkTimer = 0.0f;
+    visualLinesDirty = true;
+    desiredColumnDirty = true;
+    Invalidate();
+}
+
+void TextArea::CopySelectionToClipboard() const {
+    if (!HasSelection()) return;
+    ByteRange range = SelectionRange();
+    std::string selected = text.substr(range.start, range.end - range.start);
+    SetClipboardText(selected.c_str());
+}
+
+void TextArea::PasteFromClipboard() {
+    const char* clipboard = GetClipboardText();
+    if (!clipboard) return;
+    // TextArea is multi-line, so pasted newlines stay as hard breaks —
+    // just normalized to plain '\n' regardless of the source's line-ending
+    // convention.
+    std::string sanitized =
+        SanitizePastedText(clipboard, /*allowNewlines=*/true);
+    if (sanitized.empty()) return;
+
+    DeleteSelection();
+    text.insert(caretByteIndex, sanitized);
+    caretByteIndex += sanitized.size();
+    selectionAnchor = caretByteIndex;
+    blinkTimer = 0.0f;
+    visualLinesDirty = true;
+    desiredColumnDirty = true;
+    Invalidate();
 }
 
 // "Sticky column" is the standard text-editor behavior where pressing
@@ -434,9 +475,25 @@ void TextArea::ProcessEvents() {
         wrapMode == TextAreaWrapMode::None ? 1e6f : rect.width - 2 * kPaddingX;
     RewrapIfNeeded(innerWidth);
 
+    // Press-and-hold starts a fresh selection at the click point; holding
+    // the button — even once the mouse is outside this box's rect —
+    // keeps extending it, since PlaceCaretAtMouse's closest-boundary
+    // search degrades gracefully for a point outside the box (including
+    // above/below all visible lines). isDraggingSelection is deliberately
+    // independent of Widget's own pressOrigin/pointerDown (those drive
+    // focus-claiming and the pressed visual, not selection).
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
         CheckCollisionPointRec(GetMousePosition(), rect)) {
         PlaceCaretAtMouse(GetMousePosition());
+        selectionAnchor = caretByteIndex;
+        isDraggingSelection = true;
+    }
+    if (isDraggingSelection) {
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            PlaceCaretAtMouse(GetMousePosition());
+        } else {
+            isDraggingSelection = false;
+        }
     }
 
     // As with TextBox: clicking (handled above) works on an unfocused box,
@@ -458,6 +515,7 @@ void TextArea::ProcessEvents() {
         if (shiftHeld) {
             if (onSubmit) onSubmit();
         } else {
+            if (HasSelection()) DeleteSelection();
             InsertNewline();
         }
     }
@@ -466,16 +524,34 @@ void TextArea::ProcessEvents() {
     // comment there for why this loop (rather than a single check) is
     // needed. Note GetCharPressed() never yields '\n' for an Enter press
     // (Enter isn't a "character" in raylib's sense), so this can't
-    // double-insert a newline on top of the KEY_ENTER handling above.
+    // double-insert a newline on top of the KEY_ENTER handling above. Each
+    // character replaces the current selection, if any — but only the
+    // first iteration actually needs to delete it, since DeleteSelection()
+    // clears HasSelection() for the rest of the loop.
     int codepoint;
     while ((codepoint = GetCharPressed()) != 0) {
+        if (HasSelection()) DeleteSelection();
         int byteCount = 0;
         const char* utf8 = CodepointToUTF8(codepoint, &byteCount);
         InsertCodepoint(utf8, byteCount);
     }
 
-    if (IsKeyRepeated(KEY_BACKSPACE, backspaceHeldSeconds)) DeleteBackward();
-    if (IsKeyRepeated(KEY_DELETE, deleteHeldSeconds)) DeleteForward();
+    bool ctrlHeld = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+
+    // Backspace/Delete remove the selection instead of a single codepoint
+    // when one is active.
+    if (IsKeyRepeated(KEY_BACKSPACE, backspaceHeldSeconds)) {
+        if (HasSelection())
+            DeleteSelection();
+        else
+            DeleteBackward();
+    }
+    if (IsKeyRepeated(KEY_DELETE, deleteHeldSeconds)) {
+        if (HasSelection())
+            DeleteSelection();
+        else
+            DeleteForward();
+    }
 
     // Text may have changed above (Enter/typing/Backspace/Delete all
     // mutate `text` and set visualLinesDirty); explicitly refresh the wrap
@@ -483,10 +559,46 @@ void TextArea::ProcessEvents() {
     // *this* frame's geometry, not whatever was cached before those edits.
     RewrapIfNeeded(innerWidth);
 
-    if (IsKeyRepeated(KEY_LEFT, leftHeldSeconds)) MoveCaret(-1);
-    if (IsKeyRepeated(KEY_RIGHT, rightHeldSeconds)) MoveCaret(1);
-    if (IsKeyRepeated(KEY_UP, upHeldSeconds)) MoveCaretVertical(-1);
-    if (IsKeyRepeated(KEY_DOWN, downHeldSeconds)) MoveCaretVertical(1);
+    // Left/Right/Up/Down/Home/End all go through ApplySelectableMovement
+    // (Selection.h) so Shift extends the selection and a plain press
+    // instead collapses to whichever edge is appropriate for the
+    // direction, matching every mainstream text editor. For Left/Right/
+    // Home/End, desiredColumnDirty is force-set true after the call
+    // regardless of which branch ApplySelectableMovement took — MoveCaret/
+    // the Home/End lambdas already set it when they run, but the
+    // selection-collapse branch (which skips them entirely) wouldn't
+    // otherwise, and a horizontal action always invalidates the sticky
+    // column either way.
+    if (IsKeyRepeated(KEY_LEFT, leftHeldSeconds)) {
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, true, [this] {
+                MoveCaret(-1);
+            }
+        );
+        desiredColumnDirty = true;
+    }
+    if (IsKeyRepeated(KEY_RIGHT, rightHeldSeconds)) {
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, false, [this] {
+                MoveCaret(1);
+            }
+        );
+        desiredColumnDirty = true;
+    }
+    if (IsKeyRepeated(KEY_UP, upHeldSeconds)) {
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, true, [this] {
+                MoveCaretVertical(-1);
+            }
+        );
+    }
+    if (IsKeyRepeated(KEY_DOWN, downHeldSeconds)) {
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, false, [this] {
+                MoveCaretVertical(1);
+            }
+        );
+    }
     // Home/End are scoped to the caret's *current visual line*, not the
     // whole text (unlike TextBox, where "the whole text" and "the current
     // line" are the same thing) — this is the multi-line-appropriate
@@ -494,17 +606,42 @@ void TextArea::ProcessEvents() {
     // visible row you're on, not the end of the entire paragraph three
     // rows down.
     if (IsKeyRepeated(KEY_HOME, homeHeldSeconds)) {
-        auto [lineIdx, byteInLine] = VisualLineIndexForByte(caretByteIndex);
-        caretByteIndex = visualLines[lineIdx].startByte;
-        blinkTimer = 0.0f;
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, true, [this] {
+                auto [lineIdx, byteInLine] =
+                    VisualLineIndexForByte(caretByteIndex);
+                caretByteIndex = visualLines[lineIdx].startByte;
+                blinkTimer = 0.0f;
+            }
+        );
         desiredColumnDirty = true;
     }
     if (IsKeyRepeated(KEY_END, endHeldSeconds)) {
-        auto [lineIdx, byteInLine] = VisualLineIndexForByte(caretByteIndex);
-        caretByteIndex = visualLines[lineIdx].endByte;
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, false, [this] {
+                auto [lineIdx, byteInLine] =
+                    VisualLineIndexForByte(caretByteIndex);
+                caretByteIndex = visualLines[lineIdx].endByte;
+                blinkTimer = 0.0f;
+            }
+        );
+        desiredColumnDirty = true;
+    }
+
+    // Clipboard: one-shot (IsKeyPressed, not IsKeyRepeated) since holding
+    // Ctrl+C/X/V/A shouldn't repeat the action every frame.
+    if (ctrlHeld && IsKeyPressed(KEY_A)) {
+        selectionAnchor = 0;
+        caretByteIndex = text.size();
         blinkTimer = 0.0f;
         desiredColumnDirty = true;
     }
+    if (ctrlHeld && IsKeyPressed(KEY_C)) CopySelectionToClipboard();
+    if (ctrlHeld && IsKeyPressed(KEY_X)) {
+        CopySelectionToClipboard();
+        DeleteSelection();
+    }
+    if (ctrlHeld && IsKeyPressed(KEY_V)) PasteFromClipboard();
 }
 
 // Vertical counterpart to TextBox's ScrollToKeepCaretVisible, in row units
@@ -696,6 +833,53 @@ void TextArea::Draw() const {
             continue;
         }
         const VisualLine& line = visualLines[i];
+
+        // Selection highlight for this line, drawn before its text so the
+        // text renders on top. Only the portion of the selection that
+        // falls within this line's own byte range is drawn — most lines
+        // won't overlap the selection at all and skip this entirely.
+        if (HasSelection()) {
+            ByteRange selection = SelectionRange();
+            size_t highlightStart = selection.start > line.startByte
+                                        ? selection.start
+                                        : line.startByte;
+            size_t highlightEnd =
+                selection.end < line.endByte ? selection.end : line.endByte;
+            if (highlightStart < highlightEnd) {
+                float highlightStartX =
+                    innerRect.x - scrollOffsetXPx +
+                    MeasureTextEx(
+                        assets::cozette,
+                        text.substr(
+                                line.startByte, highlightStart - line.startByte
+                        )
+                            .c_str(),
+                        assets::cozette.baseSize,
+                        0
+                    )
+                        .x;
+                float highlightEndX =
+                    innerRect.x - scrollOffsetXPx +
+                    MeasureTextEx(
+                        assets::cozette,
+                        text.substr(
+                                line.startByte, highlightEnd - line.startByte
+                        )
+                            .c_str(),
+                        assets::cozette.baseSize,
+                        0
+                    )
+                        .x;
+                DrawRectangle(
+                    static_cast<int>(highlightStartX),
+                    static_cast<int>(y),
+                    static_cast<int>(highlightEndX - highlightStartX),
+                    static_cast<int>(lineHeight),
+                    BLUE_200
+                );
+            }
+        }
+
         std::string lineText =
             text.substr(line.startByte, line.endByte - line.startByte);
         DrawTextEx(

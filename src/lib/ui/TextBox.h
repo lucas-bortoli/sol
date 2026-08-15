@@ -4,18 +4,22 @@
 
 #include <string>
 
+#include "Selection.h"
 #include "Widget.h"
 
 namespace ui {
 
 /// A single-line, UTF-8 text input. Click (or Tab) to focus; clicking also
-/// places the caret at the nearest character boundary to the click. Type to
-/// insert; Backspace/Delete remove one codepoint at a time, Left/Right move
-/// the caret one codepoint, Home/End jump to the start/end. Holding any of
-/// these repeats it after a short delay, like a standard OS text field. No
-/// selection, no clipboard, no multi-line/wrap, no IME composition.
-/// Content that overflows the box's width scrolls horizontally to keep the
-/// caret visible.
+/// places the caret at the nearest character boundary to the click, and
+/// dragging while held selects. Shift+Left/Right/Home/End extend a
+/// selection from the keyboard; Ctrl+A/C/X/V select-all/copy/cut/paste.
+/// Type to insert (replacing any active selection); Backspace/Delete
+/// remove one codepoint at a time, or the selection if one exists;
+/// Left/Right move the caret one codepoint, Home/End jump to the
+/// start/end. Holding any of these repeats it after a short delay, like a
+/// standard OS text field. No multi-line/wrap, no IME composition.
+/// Content that overflows the box's width scrolls horizontally to keep
+/// the caret visible.
 class TextBox : public Widget {
    public:
     /// `initialText` seeds the box's contents; the caret starts at the end
@@ -56,9 +60,39 @@ class TextBox : public Widget {
     /// blink phase.
     void PlaceCaretAtMouse(Vector2 mousePosition);
 
+    /// Whether the selection anchor and caret currently differ, i.e. there
+    /// is a non-empty selection.
+    bool HasSelection() const { return selectionAnchor != caretByteIndex; }
+    /// The current selection as a normalized byte range. Only meaningful
+    /// when HasSelection() is true.
+    ByteRange SelectionRange() const {
+        return NormalizeSelection(selectionAnchor, caretByteIndex);
+    }
+    /// Erases the current selection from `text`, collapsing the caret and
+    /// anchor to where it started. No-op if there's no selection.
+    void DeleteSelection();
+    /// Copies the current selection to the system clipboard. No-op if
+    /// there's no selection.
+    void CopySelectionToClipboard() const;
+    /// Replaces the current selection (if any) with the system clipboard's
+    /// contents, sanitized to a single line (embedded newlines become
+    /// spaces).
+    void PasteFromClipboard();
+
     std::string text;
     size_t caretByteIndex = 0;
+    /// The other end of the selection; equal to caretByteIndex when
+    /// there's no selection. See HasSelection()/SelectionRange().
+    size_t selectionAnchor = 0;
     float blinkTimer = 0.0f;
+
+    /// True from the frame a press-drag begins inside this box until the
+    /// mouse button is released, regardless of whether the pointer is
+    /// still over the box — lets a drag past the box's edges keep
+    /// extending the selection. Deliberately separate from Widget's own
+    /// pressOrigin/pointerDown, which drive focus-claiming and the pressed
+    /// visual, not selection.
+    bool isDraggingSelection = false;
 
     // Per-key held-duration state for IsKeyRepeated (see Widget.h) — one
     // slot per repeatable editing key, since each must track its own hold

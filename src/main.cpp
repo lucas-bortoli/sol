@@ -79,8 +79,8 @@ int main() {
         ui::Text("Notes (Shift+Enter to log)"),
         ui::Textarea("Type some notes here.\nTry a long line to see it wrap.")
             .WrapMode(ui::TextAreaWrapMode::Character)
-            .VisibleRows(1)
-            .Grow(1)
+            .VisibleRows(3)
+            .Grow(0)
     );
 
     while (!WindowShouldClose()) {

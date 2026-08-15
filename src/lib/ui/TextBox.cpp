@@ -12,11 +12,13 @@ namespace ui {
 TextBox::TextBox(std::string initialText) : text(std::move(initialText)) {
     focusable = true;
     caretByteIndex = text.size();
+    selectionAnchor = caretByteIndex;
 }
 
 void TextBox::SetText(std::string newText) {
     text = std::move(newText);
     caretByteIndex = text.size();
+    selectionAnchor = caretByteIndex;
     Invalidate();
 }
 
@@ -78,6 +80,40 @@ void TextBox::MoveCaret(int direction) {
     // measured size, so there's nothing for the parent layout to redo.
 }
 
+void TextBox::DeleteSelection() {
+    if (!HasSelection()) return;
+    ByteRange range = SelectionRange();
+    text.erase(range.start, range.end - range.start);
+    caretByteIndex = range.start;
+    selectionAnchor = range.start;
+    blinkTimer = 0.0f;
+    Invalidate();
+}
+
+void TextBox::CopySelectionToClipboard() const {
+    if (!HasSelection()) return;
+    ByteRange range = SelectionRange();
+    std::string selected = text.substr(range.start, range.end - range.start);
+    SetClipboardText(selected.c_str());
+}
+
+void TextBox::PasteFromClipboard() {
+    const char* clipboard = GetClipboardText();
+    if (!clipboard) return;
+    // TextBox must stay single-line, so any newline in the pasted text
+    // becomes a space rather than actually breaking the line.
+    std::string sanitized =
+        SanitizePastedText(clipboard, /*allowNewlines=*/false);
+    if (sanitized.empty()) return;
+
+    DeleteSelection();
+    text.insert(caretByteIndex, sanitized);
+    caretByteIndex += sanitized.size();
+    selectionAnchor = caretByteIndex;
+    blinkTimer = 0.0f;
+    Invalidate();
+}
+
 void TextBox::ProcessEvents() {
     Widget::ProcessEvents();  // click-to-focus, for free (see Widget.cpp's
                               // PollPointerEvents — click-to-focus and the
@@ -87,9 +123,25 @@ void TextBox::ProcessEvents() {
                               // same frame, even the very click that first
                               // focuses an unfocused box).
 
+    // Press-and-hold starts a fresh selection at the click point (any click
+    // collapses whatever was selected before); continuing to hold the
+    // button — even once the mouse has moved outside this box's rect —
+    // keeps extending it, since PlaceCaretAtMouse's closest-boundary search
+    // degrades gracefully for a point outside the box. isDraggingSelection
+    // is deliberately independent of Widget's own pressOrigin/pointerDown
+    // (those drive focus-claiming and the pressed visual, not selection).
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) &&
         CheckCollisionPointRec(GetMousePosition(), GetComputedRect())) {
         PlaceCaretAtMouse(GetMousePosition());
+        selectionAnchor = caretByteIndex;
+        isDraggingSelection = true;
+    }
+    if (isDraggingSelection) {
+        if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            PlaceCaretAtMouse(GetMousePosition());
+        } else {
+            isDraggingSelection = false;
+        }
     }
 
     // Everything below only makes sense while this box holds keyboard
@@ -105,30 +157,85 @@ void TextBox::ProcessEvents() {
     // us) — drain it completely so multiple characters typed in one frame
     // (e.g. fast typing at a low frame rate) all get inserted, not just the
     // first. CodepointToUTF8 re-encodes each one back into raw UTF-8 bytes
-    // so it can be spliced into the byte-indexed `text` buffer.
+    // so it can be spliced into the byte-indexed `text` buffer. Each
+    // character replaces the current selection, if any — but only the
+    // first iteration actually needs to delete it, since DeleteSelection()
+    // clears HasSelection() for the rest of the loop.
     int codepoint;
     while ((codepoint = GetCharPressed()) != 0) {
+        if (HasSelection()) DeleteSelection();
         int byteCount = 0;
         const char* utf8 = CodepointToUTF8(codepoint, &byteCount);
         InsertCodepoint(utf8, byteCount);
     }
 
+    bool shiftHeld = IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
+    bool ctrlHeld = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+
     // Each of these uses IsKeyRepeated rather than IsKeyPressed, so holding
     // the key down repeats the action after a short delay (see Widget.h)
     // instead of requiring a fresh physical press every time — standard OS
-    // text-field behavior.
-    if (IsKeyRepeated(KEY_BACKSPACE, backspaceHeldSeconds)) DeleteBackward();
-    if (IsKeyRepeated(KEY_DELETE, deleteHeldSeconds)) DeleteForward();
-    if (IsKeyRepeated(KEY_LEFT, leftHeldSeconds)) MoveCaret(-1);
-    if (IsKeyRepeated(KEY_RIGHT, rightHeldSeconds)) MoveCaret(1);
+    // text-field behavior. Backspace/Delete remove the selection instead of
+    // a single codepoint when one is active. Left/Right/Home/End go
+    // through ApplySelectableMovement (Selection.h) so Shift extends the
+    // selection and a plain press instead collapses to whichever edge is
+    // appropriate for the direction.
+    if (IsKeyRepeated(KEY_BACKSPACE, backspaceHeldSeconds)) {
+        if (HasSelection())
+            DeleteSelection();
+        else
+            DeleteBackward();
+    }
+    if (IsKeyRepeated(KEY_DELETE, deleteHeldSeconds)) {
+        if (HasSelection())
+            DeleteSelection();
+        else
+            DeleteForward();
+    }
+    if (IsKeyRepeated(KEY_LEFT, leftHeldSeconds)) {
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, true, [this] {
+                MoveCaret(-1);
+            }
+        );
+    }
+    if (IsKeyRepeated(KEY_RIGHT, rightHeldSeconds)) {
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, false, [this] {
+                MoveCaret(1);
+            }
+        );
+    }
     if (IsKeyRepeated(KEY_HOME, homeHeldSeconds)) {
-        caretByteIndex = 0;
-        blinkTimer = 0.0f;
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, true, [this] {
+                caretByteIndex = 0;
+                blinkTimer = 0.0f;
+            }
+        );
     }
     if (IsKeyRepeated(KEY_END, endHeldSeconds)) {
+        ApplySelectableMovement(
+            caretByteIndex, selectionAnchor, shiftHeld, false, [this] {
+                caretByteIndex = text.size();
+                blinkTimer = 0.0f;
+            }
+        );
+    }
+
+    // Clipboard: one-shot (IsKeyPressed, not IsKeyRepeated) since holding
+    // Ctrl+C/X/V/A shouldn't repeat the action every frame.
+    if (ctrlHeld && IsKeyPressed(KEY_A)) {
+        selectionAnchor = 0;
         caretByteIndex = text.size();
         blinkTimer = 0.0f;
     }
+    if (ctrlHeld && IsKeyPressed(KEY_C)) CopySelectionToClipboard();
+    if (ctrlHeld && IsKeyPressed(KEY_X)) {
+        CopySelectionToClipboard();
+        DeleteSelection();
+    }
+    if (ctrlHeld && IsKeyPressed(KEY_V)) PasteFromClipboard();
 }
 
 void TextBox::ScrollToKeepCaretVisible() const {
@@ -243,6 +350,35 @@ void TextBox::Draw() const {
     // string is always drawn in full, just starting further off the left
     // edge of the scissor region as scrollOffsetPx grows.
     float textX = innerRect.x - scrollOffsetPx;
+
+    // Selection highlight drawn before the text so the text renders on top
+    // of it, using the same substr+MeasureTextEx technique as the caret
+    // position just below.
+    if (HasSelection()) {
+        ByteRange range = SelectionRange();
+        float selStartX = textX + MeasureTextEx(
+                                      assets::cozette,
+                                      text.substr(0, range.start).c_str(),
+                                      assets::cozette.baseSize,
+                                      0
+                                  )
+                                      .x;
+        float selEndX = textX + MeasureTextEx(
+                                    assets::cozette,
+                                    text.substr(0, range.end).c_str(),
+                                    assets::cozette.baseSize,
+                                    0
+                                )
+                                    .x;
+        DrawRectangle(
+            static_cast<int>(selStartX),
+            static_cast<int>(innerRect.y),
+            static_cast<int>(selEndX - selStartX),
+            static_cast<int>(innerRect.height),
+            BLUE_200
+        );
+    }
+
     // Drawn with raw DrawTextEx rather than ui::DrawText: the latter's
     // color param is ignored and it always bakes in a drop-shadow offset,
     // which reads poorly next to a thin caret line.

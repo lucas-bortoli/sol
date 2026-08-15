@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "Selection.h"
 #include "Widget.h"
 
 namespace ui {
@@ -23,14 +24,17 @@ enum class TextAreaWrapMode {
 };
 
 /// A multi-line, UTF-8, word/character/no-wrap text input. Behaves like
-/// TextBox (click/Tab to focus, click-to-place-caret, insert/Backspace/
-/// Delete/Left/Right/Home/End with press-then-repeat) extended to two
-/// dimensions: Up/Down move the caret between visual lines with "sticky
-/// column" behavior, Home/End target the current visual line (not the
-/// whole text), and Enter inserts a newline rather than doing nothing —
-/// Shift+Enter instead fires SetOnSubmit(), bypassing the normal Widget
-/// Enter-activates-onActivate path entirely (TextArea never sets
-/// onActivate). No selection, no clipboard, no IME composition.
+/// TextBox (click/Tab to focus, click-to-place-caret and click-drag to
+/// select, Shift+arrows/Home/End to extend a selection, Ctrl+A/C/X/V,
+/// insert/Backspace/Delete/Left/Right/Home/End with press-then-repeat)
+/// extended to two dimensions: Up/Down move the caret between visual lines
+/// with "sticky column" behavior (and, like Home/End, collapse a selection
+/// rather than moving relative to the caret when not held with Shift),
+/// Home/End target the current visual line (not the whole text), and
+/// Enter inserts a newline rather than doing nothing — Shift+Enter instead
+/// fires SetOnSubmit(), bypassing the normal Widget Enter-activates-
+/// onActivate path entirely (TextArea never sets onActivate). No IME
+/// composition.
 class TextArea : public Widget {
    public:
     /// `initialText` seeds the box's contents (embedded '\n' bytes are
@@ -116,8 +120,29 @@ class TextArea : public Widget {
     /// offsets. Resets the blink phase and resyncs the sticky column.
     void PlaceCaretAtMouse(Vector2 mousePosition);
 
+    /// Whether the selection anchor and caret currently differ, i.e. there
+    /// is a non-empty selection.
+    bool HasSelection() const { return selectionAnchor != caretByteIndex; }
+    /// The current selection as a normalized byte range. Only meaningful
+    /// when HasSelection() is true.
+    ByteRange SelectionRange() const {
+        return NormalizeSelection(selectionAnchor, caretByteIndex);
+    }
+    /// Erases the current selection from `text`, collapsing the caret and
+    /// anchor to where it started. No-op if there's no selection.
+    void DeleteSelection();
+    /// Copies the current selection to the system clipboard. No-op if
+    /// there's no selection.
+    void CopySelectionToClipboard() const;
+    /// Replaces the current selection (if any) with the system clipboard's
+    /// contents, sanitized to keep '\r\n'/'\r' as plain '\n' hard breaks.
+    void PasteFromClipboard();
+
     std::string text;
     size_t caretByteIndex = 0;
+    /// The other end of the selection; equal to caretByteIndex when
+    /// there's no selection. See HasSelection()/SelectionRange().
+    size_t selectionAnchor = 0;
     float blinkTimer = 0.0f;
 
     /// The caret's on-screen x position (px, relative to the line start)
@@ -140,6 +165,14 @@ class TextArea : public Widget {
     int visibleRows = 4;
 
     std::function<void()> onSubmit;
+
+    /// True from the frame a press-drag begins inside this box until the
+    /// mouse button is released, regardless of whether the pointer is
+    /// still over the box — lets a drag past the box's edges keep
+    /// extending the selection. Deliberately separate from Widget's own
+    /// pressOrigin/pointerDown, which drive focus-claiming and the pressed
+    /// visual, not selection.
+    bool isDraggingSelection = false;
 
     // Per-key held-duration state for IsKeyRepeated (see Widget.h) — one
     // slot per repeatable key, since each must track its own hold time
