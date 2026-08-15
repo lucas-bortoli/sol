@@ -69,9 +69,15 @@ class Node {
         widget->SetShrink(shrink);
         return *this;
     }
-    /// Registers a click callback. See Widget::SetOnClick.
+    /// Registers a click callback (mouse only). See Widget::SetOnClick.
     Node& OnClick(std::function<void()> callback) {
         widget->SetOnClick(std::move(callback));
+        return *this;
+    }
+    /// Registers an activate callback (mouse click or keyboard Enter/
+    /// Space). See Widget::SetOnActivate.
+    Node& OnActivate(std::function<void()> callback) {
+        widget->SetOnActivate(std::move(callback));
         return *this;
     }
     /// Registers a hover-change callback. See Widget::SetOnHoverChange.

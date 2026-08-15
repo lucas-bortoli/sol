@@ -26,9 +26,9 @@ class Widget {
     virtual void Layout(const Rectangle& bounds);
 
     /// Polls current input state against the last computed rect, firing
-    /// onClick/onHoverChange as needed and caching the result for Draw() to
-    /// read back. Runs after Layout() and before Draw() each frame.
-    /// Containers must recurse into their children.
+    /// onClick/onActivate/onHoverChange as needed and caching the result
+    /// for Draw() to read back. Runs after Layout() and before Draw() each
+    /// frame. Containers must recurse into their children.
     virtual void ProcessEvents();
 
     /// Paints using the last computed rect. Runs unconditionally every
@@ -55,13 +55,22 @@ class Widget {
     /// Equivalent to CSS flex-shrink; defaults to 1.
     Widget& SetShrink(float shrink);
 
-    /// Registers a callback fired once on the frame the widget is clicked:
-    /// the mouse button must have been pressed while the pointer was over
-    /// this widget's computed rect, and is then released while the pointer
-    /// is still (or again) over it. Dragging the press origin off the
-    /// widget before releasing cancels the click. Pass a default-constructed
-    /// std::function to clear.
+    /// Registers a callback fired once on the frame the widget is clicked
+    /// with the mouse: the mouse button must have been pressed while the
+    /// pointer was over this widget's computed rect, and is then released
+    /// while the pointer is still (or again) over it. Dragging the press
+    /// origin off the widget before releasing cancels the click. Not fired
+    /// by keyboard activation — see SetOnActivate for a callback that fires
+    /// on both. Pass a default-constructed std::function to clear.
     Widget& SetOnClick(std::function<void()> callback);
+
+    /// Registers a callback fired when the widget is "activated" — either
+    /// by the same mouse click that fires onClick, or by pressing
+    /// Enter/Space while the widget is focused (see
+    /// Widget::ProcessKeyboardFocus). Use this instead of SetOnClick for
+    /// anything that should also work from the keyboard, e.g. a Button's
+    /// primary action.
+    Widget& SetOnActivate(std::function<void()> callback);
 
     /// Registers a callback fired on the frame hover state changes, with
     /// the new hover state (true = pointer just entered, false = pointer
@@ -77,10 +86,11 @@ class Widget {
     /// focused; for everything else this is always false.
     bool IsFocused() const { return focused; }
 
-    /// Handles Tab / Shift+Tab focus cycling and Enter/Space activation for
-    /// the tree rooted at `root`. Must be called exactly once per frame (not
-    /// once per widget) — reads raylib's frame-scoped IsKeyPressed state,
-    /// which would double-fire if invoked from ProcessEvents()'s per-widget
+    /// Handles Tab / Shift+Tab focus cycling and Enter/Space activation
+    /// (fires onActivate, not onClick — see SetOnActivate) for the tree
+    /// rooted at `root`. Must be called exactly once per frame (not once
+    /// per widget) — reads raylib's frame-scoped IsKeyPressed state, which
+    /// would double-fire if invoked from ProcessEvents()'s per-widget
     /// recursion. Call after root->ProcessEvents() and before root->Draw().
     static void ProcessKeyboardFocus(Widget& root);
 
@@ -97,6 +107,7 @@ class Widget {
     float shrinkFactor = 1.0f;
 
     std::function<void()> onClick;
+    std::function<void()> onActivate;
     std::function<void(bool)> onHoverChange;
     bool wasHovered = false;
     bool pressOrigin = false;
@@ -132,7 +143,7 @@ class Widget {
     /// IntrinsicWidth().
     virtual float IntrinsicHeight() const { return 0.0f; }
 
-    /// Reads current mouse state against `rect`, fires onClick/
+    /// Reads current mouse state against `rect`, fires onClick/onActivate/
     /// onHoverChange as needed, and updates pointerDown. Called from
     /// ProcessEvents() by widgets that support input.
     void PollPointerEvents(const Rectangle& rect);

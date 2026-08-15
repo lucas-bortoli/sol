@@ -55,6 +55,11 @@ Widget& Widget::SetOnClick(std::function<void()> callback) {
     return *this;
 }
 
+Widget& Widget::SetOnActivate(std::function<void()> callback) {
+    onActivate = std::move(callback);
+    return *this;
+}
+
 Widget& Widget::SetOnHoverChange(std::function<void(bool)> callback) {
     onHoverChange = std::move(callback);
     return *this;
@@ -79,8 +84,9 @@ void Widget::PollPointerEvents(const Rectangle& rect) {
         }
     }
     if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-        if (hovered && pressOrigin && onClick) {
-            onClick();
+        if (hovered && pressOrigin) {
+            if (onClick) onClick();
+            if (onActivate) onActivate();
         }
         pressOrigin = false;
     }
@@ -99,7 +105,8 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
             bool backward =
                 IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT);
             auto it = std::find(
-                focusableWidgets.begin(), focusableWidgets.end(),
+                focusableWidgets.begin(),
+                focusableWidgets.end(),
                 g_focusedWidget
             );
             size_t n = focusableWidgets.size();
@@ -122,13 +129,12 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
     }
 
     if (g_focusedWidget) {
-        g_focusedWidget->keyDown =
-            IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_SPACE);
+        g_focusedWidget->keyDown = IsKeyDown(KEY_ENTER) || IsKeyDown(KEY_SPACE);
     }
 
     if ((IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_SPACE)) &&
         g_focusedWidget) {
-        if (g_focusedWidget->onClick) g_focusedWidget->onClick();
+        if (g_focusedWidget->onActivate) g_focusedWidget->onActivate();
     }
 }
 

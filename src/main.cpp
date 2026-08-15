@@ -47,11 +47,11 @@ int main() {
         ),
         ui::Row(
             {.gap = 4},
-            ui::Btn("-1").OnClick([&score] { score--; }).Grow(1),
-            ui::Btn("Reset").OnClick([&score] { score = 0; }).Grow(1),
-            ui::Btn("+1").OnClick([&score] { score++; }).Grow(1)
+            ui::Btn("-1").OnActivate([&score] { score--; }).Grow(1),
+            ui::Btn("Reset").OnActivate([&score] { score = 0; }).Grow(1),
+            ui::Btn("+1").OnActivate([&score] { score++; }).Grow(1)
         ),
-        ui::Btn("Level Up").OnClick([&level] { level++; })
+        ui::Btn("Level Up").OnActivate([&level] { level++; })
     );
 
     ui::Label* greeting = nullptr;
@@ -61,7 +61,7 @@ int main() {
         {.gap = 6, .padding = 8},
         ui::Text("Hello there!").Ref(greeting),
         ui::Input("").Ref(nameInput),
-        ui::Btn("Say Hi").OnClick([&greeting, &nameInput] {
+        ui::Btn("Say Hi").OnActivate([&greeting, &nameInput] {
             std::string name = nameInput->GetText();
             greeting->SetText(
                 name.empty() ? "Hi yourself!" : "Hi, " + name + "!"
