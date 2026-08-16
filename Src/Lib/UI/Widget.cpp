@@ -11,13 +11,29 @@ namespace UI {
 namespace {
 Widget* g_focusedWidget = nullptr;
 bool g_pointerEventsSuppressed = false;
+bool g_newKeyboardFocusFrame = true;
 }  // namespace
 
 namespace internal {
 void SetPointerEventsSuppressed(bool suppressed) {
     g_pointerEventsSuppressed = suppressed;
 }
+bool IsPointerEventsSuppressed() { return g_pointerEventsSuppressed; }
+void BeginKeyboardFocusFrame() { g_newKeyboardFocusFrame = true; }
 }  // namespace internal
+
+void Widget::MoveFocusTo(Widget* next) {
+    if (!next || !next->focusable || g_focusedWidget == next) return;
+    if (g_focusedWidget) {
+        g_focusedWidget->focused = false;
+        g_focusedWidget->keyDown = false;
+        g_focusedWidget->ReleaseAllKeys();
+    }
+    g_focusedWidget = next;
+    next->focused = true;
+}
+
+void Widget::Focus() { MoveFocusTo(this); }
 
 bool IsKeyRepeated(int key, float& heldSeconds, float delay, float interval) {
     if (CurrentInput().IsKeyPressed(key)) {
@@ -146,15 +162,7 @@ void Widget::PollPointerEvents(const Rectangle& rect) {
 
     if (CurrentInput().IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && hovered) {
         pressOrigin = true;
-        if (focusable && g_focusedWidget != this) {
-            if (g_focusedWidget) {
-                g_focusedWidget->focused = false;
-                g_focusedWidget->keyDown = false;
-                g_focusedWidget->ReleaseAllKeys();
-            }
-            g_focusedWidget = this;
-            focused = true;
-        }
+        MoveFocusTo(this);
     }
 
     bool firesClick = false;
@@ -184,19 +192,23 @@ void Widget::CollectFocusable(std::vector<Widget*>& out) {
 }
 
 void Widget::ProcessKeyboardFocus(Widget& root) {
-    // main.cpp calls this once per window tree, so it can run more than
-    // once within the same real frame. Everything below that isn't scoped
-    // to a specific root (repeat timing, onActivate, raw key events) must
-    // still only happen once per real frame — cache a "new frame?" decision
-    // by GetTime() (changes once per real frame) and gate that work behind
-    // it so extra calls in the same frame are no-ops for it.
+    // main.cpp (via WM) calls this once per window tree, so it can run
+    // more than once within the same real frame. Everything below that
+    // isn't scoped to a specific root (repeat timing, onActivate, raw key
+    // events) must still only happen once per real frame — gate that work
+    // behind internal::BeginKeyboardFocusFrame()'s flag rather than
+    // comparing CurrentInput().GetTime() reads: that only reliably detects
+    // "still the same frame" for a simulated clock that advances in fixed
+    // steps (FakeInput::AdvanceTime()) — real raylib's GetTime() is a live
+    // high-resolution clock, so two calls microseconds apart (this
+    // function running for a second window in the same real frame) return
+    // different values, making every call look like a new frame and
+    // double-firing onActivate for whatever's focused.
     static float tabHeldSeconds = 0.0f;
-    static double lastFrameTime = -1.0;
     static bool tabRepeatedThisFrame = false;
-    double now = CurrentInput().GetTime();
-    bool newFrame = now != lastFrameTime;
+    bool newFrame = g_newKeyboardFocusFrame;
     if (newFrame) {
-        lastFrameTime = now;
+        g_newKeyboardFocusFrame = false;
         tabRepeatedThisFrame = IsKeyRepeated(KEY_TAB, tabHeldSeconds);
     }
 
@@ -228,13 +240,7 @@ void Widget::ProcessKeyboardFocus(Widget& root) {
                 nextIndex =
                     backward ? (current + n - 1) % n : (current + 1) % n;
             }
-            if (g_focusedWidget) {
-                g_focusedWidget->focused = false;
-                g_focusedWidget->keyDown = false;
-                g_focusedWidget->ReleaseAllKeys();
-            }
-            g_focusedWidget = focusableWidgets[nextIndex];
-            g_focusedWidget->focused = true;
+            MoveFocusTo(focusableWidgets[nextIndex]);
         }
     }
 

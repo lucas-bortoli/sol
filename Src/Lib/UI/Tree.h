@@ -10,6 +10,10 @@
 #include "Button.h"
 #include "Container.h"
 #include "Label.h"
+#include "MenuBar.h"
+#include "MenuBarItem.h"
+#include "MenuItem.h"
+#include "MenuSeparator.h"
 #include "Spacer.h"
 #include "TextArea.h"
 #include "TextBox.h"
@@ -119,6 +123,17 @@ class Node {
         widget->SetOnSubmit(std::move(callback));
         return *this;
     }
+    /// Sets a MenuItem's leading icon. See MenuItem::SetIcon.
+    Node& Icon(Texture2D texture) {
+        widget->SetIcon(texture);
+        return *this;
+    }
+    /// Marks a MenuItem disabled (or re-enables it, passing false). See
+    /// MenuItem::SetDisabled.
+    Node& Disabled(bool disabled = true) {
+        widget->SetDisabled(disabled);
+        return *this;
+    }
 
     operator std::unique_ptr<Widget>() { return std::move(widget); }
 
@@ -170,6 +185,17 @@ inline Node<TextArea> Textarea(std::string initialText = "") {
 /// a class sharing a name in the same scope makes the class inaccessible
 /// via unqualified lookup thereafter).
 inline Node<Spacer> Space() { return MakeNode<Spacer>(); }
+
+/// Tree-literal factory for a MenuItem — one row inside a Menu()'s
+/// dropdown. Chain `.Icon(texture)`/`.Disabled()` and use `.OnActivate()`
+/// for its action (see MenuItem.h for why `.OnClick()` is reserved).
+inline Node<MenuItem> Item(std::string text) {
+    return MakeNode<MenuItem>(std::move(text));
+}
+
+/// Tree-literal factory for a MenuSeparator — a thin divider between
+/// Item()s inside a Menu()'s dropdown.
+inline Node<MenuSeparator> Separator() { return MakeNode<MenuSeparator>(); }
 
 /// Designated-initializer property bag for Row()/Column(), e.g.
 /// Row({.justify = Justify::SpaceBetween, .gap = 4}, ...).
@@ -237,6 +263,36 @@ Node<Container> Column(ContainerProps props, NodesT&&... children) {
         props.backgroundColor,
         Children(std::forward<NodesT>(children)...)
     );
+}
+
+/// Tree-literal factory for a MenuBarItem — a top-level MenuBar title
+/// (e.g. "File") whose dropdown holds the given Item()/Separator()
+/// children, e.g.:
+///
+///   UI::MenuBar(
+///       UI::Menu("File",
+///           UI::Item("New").OnActivate([] { ... }),
+///           UI::Separator(),
+///           UI::Item("Exit").OnActivate([] { ... })));
+///
+/// Named Menu() to read naturally at the call site rather than
+/// MenuBarItem() — the class name describes what it *is* (one bar item
+/// owning a popup); the factory name describes what it *reads like* (a
+/// menu, the way Win32/most toolkits call it).
+template <typename... NodesT>
+Node<MenuBarItem> Menu(std::string label, NodesT&&... items) {
+    return MakeNode<MenuBarItem>(
+        std::move(label), Children(std::forward<NodesT>(items)...)
+    );
+}
+
+/// Tree-literal factory for a MenuStrip — a horizontal bar of Menu()
+/// items. See MenuBar.h for the keyboard/mouse interaction model (the
+/// runtime class is named MenuStrip, not MenuBar, so it doesn't hide this
+/// factory from unqualified lookup — see MenuBar.h).
+template <typename... NodesT>
+Node<MenuStrip> MenuBar(NodesT&&... menus) {
+    return MakeNode<MenuStrip>(Children(std::forward<NodesT>(menus)...));
 }
 
 }  // namespace UI

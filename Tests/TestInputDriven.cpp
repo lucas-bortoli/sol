@@ -84,6 +84,7 @@ TEST_CASE("Widget::ProcessKeyboardFocus: Tab cycles focus in tree order") {
     fake.QueueKeyPress(KEY_TAB);
     fake.SetKeyDown(KEY_TAB, true);
     root->ProcessEvents();
+    UI::internal::BeginKeyboardFocusFrame();
     UI::Widget::ProcessKeyboardFocus(*root);
     CHECK(first->IsFocused());
     CHECK_FALSE(second->IsFocused());
@@ -92,6 +93,7 @@ TEST_CASE("Widget::ProcessKeyboardFocus: Tab cycles focus in tree order") {
     fake.AdvanceTime(1.0f);  // clear IsKeyRepeated's held-timer state
     fake.SetKeyDown(KEY_TAB, true);
     root->ProcessEvents();
+    UI::internal::BeginKeyboardFocusFrame();
     UI::Widget::ProcessKeyboardFocus(*root);
     CHECK_FALSE(first->IsFocused());
     CHECK(second->IsFocused());
@@ -113,6 +115,7 @@ TEST_CASE("Widget::ProcessKeyboardFocus: Enter activates the focused widget") {
     fake.QueueKeyPress(KEY_TAB);
     fake.SetKeyDown(KEY_TAB, true);
     root->ProcessEvents();
+    UI::internal::BeginKeyboardFocusFrame();
     UI::Widget::ProcessKeyboardFocus(*root);
     REQUIRE(button->IsFocused());
 
@@ -120,6 +123,7 @@ TEST_CASE("Widget::ProcessKeyboardFocus: Enter activates the focused widget") {
     fake.SetKeyDown(KEY_TAB, false);
     fake.SetKeyDown(KEY_ENTER, true);
     root->ProcessEvents();
+    UI::internal::BeginKeyboardFocusFrame();
     UI::Widget::ProcessKeyboardFocus(*root);
 
     CHECK(activated);

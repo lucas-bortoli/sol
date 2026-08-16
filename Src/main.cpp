@@ -58,10 +58,14 @@ class CalculatorState {
 
     static double Apply(double lhs, double rhs, char op) {
         switch (op) {
-            case '+': return lhs + rhs;
-            case '-': return lhs - rhs;
-            case '*': return lhs * rhs;
-            case '/': return rhs == 0.0 ? 0.0 : lhs / rhs;
+            case '+':
+                return lhs + rhs;
+            case '-':
+                return lhs - rhs;
+            case '*':
+                return lhs * rhs;
+            case '/':
+                return rhs == 0.0 ? 0.0 : lhs / rhs;
         }
         return rhs;
     }
@@ -111,7 +115,7 @@ int main() {
     WM::internal::Initialize();
 
     auto todoWindow = WM::WindowCreate();
-    WM::WindowSetSize(todoWindow, {280, 320});
+    WM::WindowSetSize(todoWindow, {280, 350});
     WM::WindowSetPosition(todoWindow, {16, 16});
     WM::WindowSetTitle(todoWindow, "Todo List");
 
@@ -133,12 +137,41 @@ int main() {
     WM::WindowSetContent(
         todoWindow,
         UI::Column(
-            {.gap = 6, .padding = 8},
-            UI::Text("Todo List"),
-            UI::Row(
-                {.gap = 4}, UI::Input("").Ref(newItemInput).Grow(1), UI::Btn("Add").OnActivate(addFromInput).Shrink(0)
+            {.gap = 6},
+            UI::MenuBar(
+                UI::Menu(
+                    "File",
+                    UI::Item("New List").OnActivate([] { printf("[Menu] File > New List\n"); }),
+                    UI::Item("Open...").Icon(Assets::IconOpenExternal).OnActivate([] {
+                        printf("[Menu] File > Open...\n");
+                    }),
+                    UI::Separator(),
+                    UI::Item("Save").Icon(Assets::IconSave).Disabled(),
+                    UI::Item("Exit").OnActivate([] {
+                        printf("[Menu] File > Exit\n");
+                        CloseWindow();
+                    })
+                ),
+                UI::Menu(
+                    "Edit",
+                    UI::Item("Cut").Disabled(),
+                    UI::Item("Copy").Disabled(),
+                    UI::Item("Paste").Disabled(),
+                    UI::Separator(),
+                    UI::Item("Clear Completed").OnActivate([] { printf("[Menu] Edit > Clear Completed\n"); })
+                )
             ),
-            UI::Column({.gap = 4, .overflow = UI::Overflow::Scroll}).Ref(itemList).Grow(1)
+            UI::Column(
+                {.gap = 6, .padding = 8},
+                UI::Text("Todo List"),
+                UI::Row(
+                    {.gap = 4},
+                    UI::Input("").Ref(newItemInput).Grow(1),
+                    UI::Btn("Add").OnActivate(addFromInput).Shrink(0)
+                ),
+                UI::Column({.gap = 4, .overflow = UI::Overflow::Scroll}).Ref(itemList).Grow(1)
+            )
+                .Grow(1)
         )
     );
 
@@ -174,17 +207,23 @@ int main() {
         UI::Column(
             {.gap = 6, .padding = 8},
             UI::Text("0").Ref(calculatorDisplay),
-            UI::Row({.gap = 4}, digitButton('7'), digitButton('8'), digitButton('9'), operatorButton('/', "/")),
-            UI::Row({.gap = 4}, digitButton('4'), digitButton('5'), digitButton('6'), operatorButton('*', "*")),
-            UI::Row({.gap = 4}, digitButton('1'), digitButton('2'), digitButton('3'), operatorButton('-', "-")),
+            UI::Row({.gap = 4}, digitButton('7'), digitButton('8'), digitButton('9'), operatorButton('/', "/"))
+                .Shrink(0),
+            UI::Row({.gap = 4}, digitButton('4'), digitButton('5'), digitButton('6'), operatorButton('*', "*"))
+                .Shrink(0),
+            UI::Row({.gap = 4}, digitButton('1'), digitButton('2'), digitButton('3'), operatorButton('-', "-"))
+                .Shrink(0),
             UI::Row(
-                {.gap = 4}, digitButton('0'), digitButton('.'),
+                {.gap = 4},
+                digitButton('0'),
+                digitButton('.'),
                 UI::Btn("C").Grow(1).OnActivate([&refreshDisplay] {
                     calculatorState.PressClear();
                     refreshDisplay();
                 }),
                 operatorButton('+', "+")
-            ),
+            )
+                .Shrink(0),
             UI::Btn("=").OnActivate([&refreshDisplay] {
                 calculatorState.PressEquals();
                 refreshDisplay();

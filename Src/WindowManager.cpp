@@ -307,6 +307,14 @@ void Initialize() {}
 void ProcessEvents() {
     std::lock_guard<std::mutex> lock(_window_mutex);
 
+    // Every window's content gets its own UI::Widget::ProcessKeyboardFocus()
+    // call below, all within this one real frame — tell it a new frame is
+    // starting so its once-per-real-frame bookkeeping (Enter/Space
+    // activation, raw key events) fires exactly once across all of them
+    // rather than once per window. See BeginKeyboardFocusFrame()'s
+    // doc-comment for why this can't just compare GetTime() reads instead.
+    UI::internal::BeginKeyboardFocusFrame();
+
     UI::InputSource& input = UI::CurrentInput();
     Vector2 mouse = input.GetMousePosition();
 

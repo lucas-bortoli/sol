@@ -30,6 +30,11 @@ add_executable(sol
     Src/Lib/UI/TextBox.cpp
     Src/Lib/UI/Utf8.cpp
     Src/Lib/UI/TextArea.cpp
+    Src/Lib/UI/MenuItem.cpp
+    Src/Lib/UI/MenuSeparator.cpp
+    Src/Lib/UI/MenuPopup.cpp
+    Src/Lib/UI/MenuBarItem.cpp
+    Src/Lib/UI/MenuBar.cpp
 )
 
 target_link_libraries(sol PRIVATE raylib)
@@ -43,6 +48,7 @@ add_executable(sol_tests
     Tests/TestInputDriven.cpp
     Tests/TestWindowManager.cpp
     Tests/TestLayerStacker.cpp
+    Tests/TestMenu.cpp
     Src/Lib/FontParser/Bdf.cpp
     Src/WindowManager.cpp
     Src/Shell.cpp
@@ -58,6 +64,11 @@ add_executable(sol_tests
     Src/Lib/UI/TextBox.cpp
     Src/Lib/UI/Utf8.cpp
     Src/Lib/UI/TextArea.cpp
+    Src/Lib/UI/MenuItem.cpp
+    Src/Lib/UI/MenuSeparator.cpp
+    Src/Lib/UI/MenuPopup.cpp
+    Src/Lib/UI/MenuBarItem.cpp
+    Src/Lib/UI/MenuBar.cpp
 )
 target_include_directories(sol_tests PRIVATE Vendor/doctest/doctest)
 target_link_libraries(sol_tests PRIVATE raylib)

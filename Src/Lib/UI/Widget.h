@@ -20,6 +20,28 @@ namespace internal {
 /// in the overlap between two windows can't reach the one that isn't on
 /// top. Does not affect keyboard focus/activation.
 void SetPointerEventsSuppressed(bool suppressed);
+/// The current value set by SetPointerEventsSuppressed() — for a caller
+/// that needs to temporarily override it and then restore whatever it
+/// was before (e.g. MenuBar unsuppressing its own open popup, which is
+/// always topmost over its own window regardless of that window's own
+/// occlusion state, without clobbering the enclosing suppression for
+/// whatever runs after it).
+bool IsPointerEventsSuppressed();
+
+/// Marks the start of a new real engine frame for Widget::
+/// ProcessKeyboardFocus()'s once-per-frame bookkeeping (Tab-repeat timing,
+/// Enter/Space activation, raw key press/down/up draining) — call exactly
+/// once per real frame, before the first ProcessKeyboardFocus() call
+/// (WM::internal::ProcessEvents() does this). Needed because that
+/// bookkeeping used to detect a "new frame" by comparing consecutive
+/// CurrentInput().GetTime() reads, which only holds for a simulated clock
+/// that advances in fixed FakeInput::AdvanceTime() steps — real raylib's
+/// GetTime() is a live high-resolution clock, so two calls microseconds
+/// apart (e.g. ProcessKeyboardFocus() for a second window in the same
+/// real frame) reliably return different values, making every call look
+/// like a new frame and double-firing onActivate for whichever widget is
+/// focused.
+void BeginKeyboardFocusFrame();
 }  // namespace internal
 
 /// Base of every UI element. Owns nothing about its children; layout and
@@ -131,6 +153,16 @@ class Widget : public LayerStacker::Drawable {
     /// The rectangle computed by the most recent Layout() call.
     const Rectangle& GetComputedRect() const { return computedRect; }
 
+    /// This widget's natural size (see the protected IntrinsicWidth()/
+    /// Height() virtuals below), ignoring any fixed width/height override
+    /// — public so a caller driving Layout() externally (e.g. a floating
+    /// panel that isn't itself part of a Container's flow layout, like
+    /// MenuPopup) can size a bounds rect to fit before calling Layout().
+    /// Ordinary tree-literal usage never needs this — Container computes
+    /// it internally as part of its own flex arrangement.
+    float GetIntrinsicWidth() const { return IntrinsicWidth(); }
+    float GetIntrinsicHeight() const { return IntrinsicHeight(); }
+
     /// This widget's parent Container, or nullptr for a tree root. Only
     /// Container ever has children, so this is typed as Container* rather
     /// than the more generic Widget* — see the forward declaration above.
@@ -141,12 +173,34 @@ class Widget : public LayerStacker::Drawable {
     /// focused; for everything else this is always false.
     bool IsFocused() const { return focused; }
 
+    /// Whether this widget type participates in focus at all (see the
+    /// protected `focusable` field) — public so external code walking a
+    /// list of widgets (e.g. MenuBar skipping disabled items/separators
+    /// during arrow-key navigation) can tell which ones are eligible
+    /// without needing derived-class-specific knowledge like "is this a
+    /// disabled MenuItem."
+    bool IsFocusable() const { return focusable; }
+
+    /// Explicitly moves the single app-wide keyboard focus pointer to this
+    /// widget, releasing the previously-focused widget's held keys first
+    /// (same as a mouse press or Tab landing on it would). No-op if this
+    /// widget isn't focusable or is already focused. For widgets that need
+    /// to move focus programmatically — e.g. a menu opening and focusing
+    /// its first item — rather than waiting for a mouse press or Tab.
+    void Focus();
+
     /// Handles Tab / Shift+Tab focus cycling and Enter/Space activation
     /// (fires onActivate, not onClick — see SetOnActivate) for the tree
-    /// rooted at `root`. Must be called exactly once per frame (not once
+    /// rooted at `root`. Must be called once per tree per frame (not once
     /// per widget) — reads raylib's frame-scoped IsKeyPressed state, which
     /// would double-fire if invoked from ProcessEvents()'s per-widget
     /// recursion. Call after root->ProcessEvents() and before root->Draw().
+    /// Safe to call once for each of several window trees within the same
+    /// real frame (main.cpp does, via WM) — internally gates the
+    /// once-per-real-frame part (Enter/Space, raw key events) behind
+    /// internal::BeginKeyboardFocusFrame(), which the caller driving
+    /// multiple trees must call exactly once per real frame, before the
+    /// first of these calls.
     static void ProcessKeyboardFocus(Widget& root);
 
     /// Appends this widget to `out` if it is focusable. Containers override
@@ -253,6 +307,13 @@ class Widget : public LayerStacker::Drawable {
     /// whenever focus moves away from this widget, so a consumer never sees
     /// a key reported as pressed with no matching release.
     void ReleaseAllKeys();
+
+    /// Shared by Focus(), PollPointerEvents()'s mouse-press branch, and
+    /// ProcessKeyboardFocus()'s Tab-cycle branch: releases the previous
+    /// focus holder's held keys and moves the single global focus pointer
+    /// to `next`. No-op if `next` is null, isn't focusable, or is already
+    /// focused.
+    static void MoveFocusTo(Widget* next);
 };
 
 /// Standard OS-style press-then-repeat timing: true on the initial press of
