@@ -1,5 +1,6 @@
 #include <raylib.h>
 
+#include <optional>
 #include <string>
 
 #include "Assets.h"
@@ -7,6 +8,76 @@
 #include "Palette.h"
 #include "Shell.h"
 #include "WindowManager.h"
+
+/// Minimal four-function calculator state machine: tracks the value typed
+/// so far, a pending operator, and the left-hand operand it applies to.
+/// Digit/operator/equals all funnel through here so the display label is
+/// the only thing UI callbacks need to update.
+class CalculatorState {
+   public:
+    void PressDigit(char digit) {
+        if (justEvaluated) {
+            entry.clear();
+            justEvaluated = false;
+        }
+        if (digit == '.' && entry.find('.') != std::string::npos) return;
+        if (entry == "0" && digit != '.') entry.clear();
+        entry.push_back(digit);
+    }
+
+    void PressOperator(char op) {
+        if (!pendingOp) {
+            leftOperand = CurrentValue();
+        } else if (!justEvaluated) {
+            leftOperand = Apply(leftOperand, CurrentValue(), *pendingOp);
+        }
+        pendingOp = op;
+        entry.clear();
+        justEvaluated = false;
+    }
+
+    void PressEquals() {
+        if (!pendingOp) return;
+        leftOperand = Apply(leftOperand, CurrentValue(), *pendingOp);
+        entry = FormatValue(leftOperand);
+        pendingOp = std::nullopt;
+        justEvaluated = true;
+    }
+
+    void PressClear() {
+        entry.clear();
+        leftOperand = 0.0;
+        pendingOp = std::nullopt;
+        justEvaluated = false;
+    }
+
+    std::string Display() const { return entry.empty() ? "0" : entry; }
+
+   private:
+    double CurrentValue() const { return entry.empty() ? 0.0 : std::stod(entry); }
+
+    static double Apply(double lhs, double rhs, char op) {
+        switch (op) {
+            case '+': return lhs + rhs;
+            case '-': return lhs - rhs;
+            case '*': return lhs * rhs;
+            case '/': return rhs == 0.0 ? 0.0 : lhs / rhs;
+        }
+        return rhs;
+    }
+
+    static std::string FormatValue(double value) {
+        std::string text = std::to_string(value);
+        while (!text.empty() && text.back() == '0') text.pop_back();
+        if (!text.empty() && text.back() == '.') text.pop_back();
+        return text.empty() ? "0" : text;
+    }
+
+    std::string entry;
+    double leftOperand = 0.0;
+    std::optional<char> pendingOp = std::nullopt;
+    bool justEvaluated = false;
+};
 
 /// Appends a new "<item text>  [x]" row to `itemList`, with the [x] button
 /// removing the whole row on click — demonstrates Container::AppendChild
@@ -75,6 +146,52 @@ int main() {
     AddTodoItem(itemList, "Wire up the window manager");
     AddTodoItem(itemList, "Ship a demo app");
 
+    auto calculatorWindow = WM::WindowCreate();
+    WM::WindowSetSize(calculatorWindow, {220, 300});
+    WM::WindowSetPosition(calculatorWindow, {320, 16});
+    WM::WindowSetTitle(calculatorWindow, "Calculator");
+
+    static CalculatorState calculatorState;
+    UI::Label* calculatorDisplay = nullptr;
+
+    auto refreshDisplay = [&calculatorDisplay] { calculatorDisplay->SetText(calculatorState.Display()); };
+
+    auto digitButton = [&refreshDisplay](char digit) -> std::unique_ptr<UI::Widget> {
+        return UI::Btn(std::string(1, digit)).Grow(1).OnActivate([&refreshDisplay, digit] {
+            calculatorState.PressDigit(digit);
+            refreshDisplay();
+        });
+    };
+    auto operatorButton = [&refreshDisplay](char op, std::string label) -> std::unique_ptr<UI::Widget> {
+        return UI::Btn(std::move(label)).Grow(1).OnActivate([&refreshDisplay, op] {
+            calculatorState.PressOperator(op);
+            refreshDisplay();
+        });
+    };
+
+    WM::WindowSetContent(
+        calculatorWindow,
+        UI::Column(
+            {.gap = 6, .padding = 8},
+            UI::Text("0").Ref(calculatorDisplay),
+            UI::Row({.gap = 4}, digitButton('7'), digitButton('8'), digitButton('9'), operatorButton('/', "/")),
+            UI::Row({.gap = 4}, digitButton('4'), digitButton('5'), digitButton('6'), operatorButton('*', "*")),
+            UI::Row({.gap = 4}, digitButton('1'), digitButton('2'), digitButton('3'), operatorButton('-', "-")),
+            UI::Row(
+                {.gap = 4}, digitButton('0'), digitButton('.'),
+                UI::Btn("C").Grow(1).OnActivate([&refreshDisplay] {
+                    calculatorState.PressClear();
+                    refreshDisplay();
+                }),
+                operatorButton('+', "+")
+            ),
+            UI::Btn("=").OnActivate([&refreshDisplay] {
+                calculatorState.PressEquals();
+                refreshDisplay();
+            })
+        )
+    );
+
     while (!WindowShouldClose()) {
         Shell::ProcessEvents();
 
@@ -97,6 +214,7 @@ int main() {
     }
 
     WM::WindowDestroy(todoWindow);
+    WM::WindowDestroy(calculatorWindow);
 
     WM::internal::Cleanup();
     Assets::Cleanup();
