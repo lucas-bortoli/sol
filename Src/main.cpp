@@ -5,6 +5,7 @@
 #include "Assets.h"
 #include "Lib/UI/UI.h"
 #include "Palette.h"
+#include "Shell.h"
 #include "WindowManager.h"
 
 /// Appends a new "<item text>  [x]" row to `itemList`, with the [x] button
@@ -30,6 +31,7 @@ void AddTodoItem(UI::Container* itemList, const std::string& text) {
 }
 
 int main() {
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(640, 400, "Sol");
     SetTargetFPS(30);
     HideCursor();
@@ -63,13 +65,9 @@ int main() {
             {.gap = 6, .padding = 8},
             UI::Text("Todo List"),
             UI::Row(
-                {.gap = 4},
-                UI::Input("").Ref(newItemInput).Grow(1),
-                UI::Btn("Add").OnActivate(addFromInput).Shrink(0)
+                {.gap = 4}, UI::Input("").Ref(newItemInput).Grow(1), UI::Btn("Add").OnActivate(addFromInput).Shrink(0)
             ),
-            UI::Column({.gap = 4, .overflow = UI::Overflow::Scroll})
-                .Ref(itemList)
-                .Grow(1)
+            UI::Column({.gap = 4, .overflow = UI::Overflow::Scroll}).Ref(itemList).Grow(1)
         )
     );
 
@@ -78,15 +76,18 @@ int main() {
     AddTodoItem(itemList, "Ship a demo app");
 
     while (!WindowShouldClose()) {
-        auto mousePos = GetMousePosition();
+        Shell::ProcessEvents();
 
         BeginDrawing();
         ClearBackground(RAYWHITE);
+
+        Shell::Draw();
 
         WM::internal::ProcessEvents();
         WM::internal::Draw();
 
         // lastly: the cursor
+        auto mousePos = GetMousePosition();
         if (IsCursorOnScreen()) {
             DrawTexture(Assets::CursorDefault, mousePos.x, mousePos.y, WHITE);
             DrawPixel(mousePos.x, mousePos.y, RED_400);
