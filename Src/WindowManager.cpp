@@ -137,7 +137,7 @@ Rectangle ComputeCloseButtonRect(const Window& window) {
     };
 }
 
-// Windows move and resize on a 4px grid, so their edges always line up
+// Windows move and resize on an 8px grid, so their edges always line up
 // cleanly with each other regardless of drag start position.
 constexpr float kGridSize = 8.0f;
 constexpr float kMinWindowSize = 40.0f;
