@@ -123,8 +123,19 @@ void MenuStrip::ProcessEvents() {
     // bar" behavior). Deliberately doesn't move keyboard focus — tracked
     // separately so the Tab-follow check below doesn't then "correct" this
     // back by seeing keyboard focus still on the old item.
+    //
+    // Gated on the mouse having actually moved this frame, not merely
+    // resting over a different item — otherwise Left/Right (which changes
+    // openItem out from under a stationary mouse) would get immediately
+    // fought back to whatever the mouse happens to be sitting on, flickering
+    // every frame between the keyboard-selected item and the hovered one.
+    bool mouseMoved =
+        !hasLastMousePosition || mouse.x != lastMousePosition.x || mouse.y != lastMousePosition.y;
+    lastMousePosition = mouse;
+    hasLastMousePosition = true;
+
     bool switchedByHover = false;
-    if (openItem) {
+    if (openItem && mouseMoved) {
         for (MenuBarItem* item : items) {
             if (item != openItem && CheckCollisionPointRec(mouse, item->GetComputedRect())) {
                 OpenItem(item);

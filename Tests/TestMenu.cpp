@@ -168,6 +168,50 @@ TEST_CASE("MenuBar: only one dropdown is open at a time, and hovering a "
     }
 }
 
+TEST_CASE("MenuBar: Right-selecting a different item via keyboard while the "
+          "mouse rests stationary over yet another title doesn't flicker "
+          "back to the hovered one") {
+    FakeInput fake;
+    ScopedInput scoped(fake);
+
+    UI::MenuBarItem* fileMenu = nullptr;
+    UI::MenuBarItem* editMenu = nullptr;
+    UI::MenuBarItem* viewMenu = nullptr;
+    std::unique_ptr<UI::Widget> root = UI::MenuBar(
+        UI::Menu("File", UI::Item("New")).Ref(fileMenu),
+        UI::Menu("Edit", UI::Item("Cut")).Ref(editMenu),
+        UI::Menu("View", UI::Item("Zoom")).Ref(viewMenu)
+    );
+    root->Layout({0, 0, 300, 200});
+
+    Click(fake, *root, CenterOf(fileMenu->GetComputedRect()));
+    REQUIRE(fileMenu->IsPopupOpen());
+
+    // Hover View (without touching keyboard focus, still on File) — the
+    // mouse move itself legitimately hover-switches the open dropdown to
+    // View.
+    fake.NextFrame();
+    fake.MoveMouseTo(CenterOf(viewMenu->GetComputedRect()));
+    root->ProcessEvents();
+    REQUIRE(viewMenu->IsPopupOpen());
+
+    // Right-arrow from the still-focused File moves keyboard selection (and
+    // the open dropdown) to Edit, with the mouse staying put over View the
+    // whole time. Without gating hover-switch on the mouse actually moving,
+    // the very next frame would immediately fight this back to View, and
+    // every subsequent stationary frame would flicker between the two.
+    fake.NextFrame();
+    PressKey(fake, *root, KEY_RIGHT);
+    REQUIRE(editMenu->IsPopupOpen());
+
+    for (int i = 0; i < 3; i++) {
+        fake.NextFrame();
+        root->ProcessEvents();
+        CHECK(editMenu->IsPopupOpen());
+        CHECK_FALSE(viewMenu->IsPopupOpen());
+    }
+}
+
 TEST_CASE("MenuBar: a disabled item never fires onActivate on click") {
     FakeInput fake;
     ScopedInput scoped(fake);

@@ -58,6 +58,17 @@ class MenuStrip : public Container {
     /// would "correct" it back since focus never moved, which lets
     /// hover-switch fire again the frame after — an infinite flicker.
     MenuBarItem* lastFocusedTopLevel = nullptr;
+    /// The mouse position as of the last ProcessEvents() call, used to
+    /// gate hover-switch on the mouse actually having moved this frame
+    /// (see mouseMoved in ProcessEvents()) rather than merely resting over
+    /// a different item — a stationary mouse must never fight a
+    /// Left/Right-driven change of `openItem` back to whatever it happens
+    /// to be sitting on.
+    Vector2 lastMousePosition{};
+    /// False until the first ProcessEvents() call, so that first call
+    /// always treats the mouse as having "moved" rather than comparing
+    /// against a meaningless default-constructed lastMousePosition.
+    bool hasLastMousePosition = false;
 
     void ToggleItem(MenuBarItem* item);
     void OpenItem(MenuBarItem* item);
