@@ -32,6 +32,7 @@ Container::Container(
     float initialGap,
     Padding initialPadding,
     Overflow initialOverflow,
+    std::optional<Color> initialBackgroundColor,
     std::vector<std::unique_ptr<Widget>> initialChildren
 )
     : direction(initialDirection),
@@ -40,6 +41,7 @@ Container::Container(
       gap(initialGap),
       padding(initialPadding),
       overflow(initialOverflow),
+      backgroundColor(initialBackgroundColor),
       children(std::move(initialChildren)) {
     for (auto& child : children) child->parent = this;
 }
@@ -402,6 +404,8 @@ void Container::CollectFocusable(std::vector<Widget*>& out) {
 }
 
 void Container::Draw() const {
+    if (backgroundColor) DrawRectangleRec(computedRect, *backgroundColor);
+
     bool overflowing = IsOverflowing();
     if (overflowing) {
         BeginScissorMode(

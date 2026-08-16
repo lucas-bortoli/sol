@@ -180,15 +180,17 @@ struct ContainerProps {
     /// Uniform padding shorthand, applied to any side not overridden below
     /// (CSS `padding: Npx` shorthand).
     float padding = 0.0f;
-    std::optional<float> paddingTop;
-    std::optional<float> paddingRight;
-    std::optional<float> paddingBottom;
-    std::optional<float> paddingLeft;
+    std::optional<float> paddingTop = std::nullopt;
+    std::optional<float> paddingRight = std::nullopt;
+    std::optional<float> paddingBottom = std::nullopt;
+    std::optional<float> paddingLeft = std::nullopt;
     bool reverse = false;
     /// Overflow::Visible (default) keeps today's shrink-to-fit behavior.
     /// Overflow::Scroll lets main-axis content overflow behind a clipped,
     /// scrollable, overlay-scrollbar viewport instead.
     Overflow overflow = Overflow::Visible;
+    /// Painted behind children when set. See Container::backgroundColor.
+    std::optional<Color> backgroundColor = std::nullopt;
 };
 
 /// Resolves a ContainerProps' padding fields (uniform shorthand + per-side
@@ -214,6 +216,7 @@ Node<Container> Row(ContainerProps props, NodesT&&... children) {
         props.gap,
         ResolvePadding(props),
         props.overflow,
+        props.backgroundColor,
         Children(std::forward<NodesT>(children)...)
     );
 }
@@ -231,6 +234,7 @@ Node<Container> Column(ContainerProps props, NodesT&&... children) {
         props.gap,
         ResolvePadding(props),
         props.overflow,
+        props.backgroundColor,
         Children(std::forward<NodesT>(children)...)
     );
 }

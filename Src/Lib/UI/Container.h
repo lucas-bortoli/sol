@@ -64,6 +64,7 @@ class Container : public Widget {
         float initialGap,
         Padding initialPadding,
         Overflow initialOverflow,
+        std::optional<Color> initialBackgroundColor,
         std::vector<std::unique_ptr<Widget>> initialChildren
     );
 
@@ -113,6 +114,9 @@ class Container : public Widget {
     float gap;
     Padding padding;
     Overflow overflow;
+    /// Painted behind children when set, filling computedRect. Unset (the
+    /// default) means the container paints nothing of its own.
+    std::optional<Color> backgroundColor;
 
     // Overflow::Scroll state. Mutable: derived draw/scroll state recomputed
     // from Layout(), not model state — same rationale as TextArea's
