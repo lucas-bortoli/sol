@@ -88,12 +88,12 @@ void DrawRectWithBorderAndShadow(
 
     // background
     DrawRectangle(
-        rectangle.x, rectangle.y, rectangle.width, rectangle.height, WHITE
+        rectangle.x, rectangle.y, rectangle.width, rectangle.height, fillColor
     );
 
     // border
     DrawRectangleLines(
-        rectangle.x, rectangle.y, rectangle.width, rectangle.height, NEUTRAL_600
+        rectangle.x, rectangle.y, rectangle.width, rectangle.height, borderColor
     );
 }
 }  // namespace UI

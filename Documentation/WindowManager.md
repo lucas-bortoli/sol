@@ -15,10 +15,11 @@ how the two are wired together.
   `static`s in `WindowManager.cpp`; `WM::internal::Initialize()`/
   `Cleanup()` are currently no-ops (`WindowManager.cpp:117,200`) — nothing
   about window state is tied to their lifetime.
-- **No z-order, no drag/resize interaction yet.** Windows draw in
-  ascending-handle (creation) order — there's no click-to-front or
-  raise-on-focus. The titlebar highlights on hover but nothing is
-  draggable, and `WindowSetResizable`'s flag isn't read anywhere yet.
+- **No z-order, but windows are draggable and resizable.** Windows draw
+  in ascending-handle (creation) order — there's no click-to-front or
+  raise-on-focus. Dragging the titlebar moves a window; dragging the
+  invisible border region just outside a window's edges/corners resizes it. Both move
+  and resize snap position/size to a grid.
 
 ---
 
@@ -69,7 +70,7 @@ That's the whole loop — `wm` handles laying out and drawing every
 window's content itself; the caller never touches a content `Rectangle`
 or calls a widget's `Layout`/`Draw`/`ProcessEvents` directly. Call
 `WM::internal::ProcessEvents()` before mutating any widget state (so input
-from *this* frame is reflected before you read/write it) and
+from _this_ frame is reflected before you read/write it) and
 `WM::internal::Draw()` after.
 
 Destroy with `WM::WindowDestroy(handle)` when done (typically at shutdown,
@@ -82,25 +83,25 @@ alongside `WM::internal::Cleanup()`) — this also drops the window's
 
 ### Window lifecycle
 
-| Function | Purpose |
-|---|---|
-| `WindowCreate()` | Creates a window (title `"New Window"`, zero-sized, resizable) and returns its handle. |
-| `WindowSetTitle(handle, title)` | Sets the titlebar text. |
-| `WindowSetPosition(handle, {x, y})` | Sets the window's outer top-left corner. |
-| `WindowSetSize(handle, {w, h})` | Sets the window's outer width/height. A window with zero size in both dimensions is skipped entirely by `Draw()` (`WindowManager.cpp:134-136`) — nothing is drawn until you size it. |
-| `WindowSetResizable(handle, bool)` | Stores a resizable flag. Not yet read anywhere — reserved for a future drag-to-resize interaction. |
-| `WindowDestroy(handle)` | Removes the window (and its content tree, if any) from the registry. |
-| `WindowSetContent(handle, content)` | Takes ownership of a `UI::Widget` tree as the window's content. Replaces any previously-set content. See the guide above. |
-| `WindowGetClientRect(handle)` | Returns the window's *content* rectangle — inside the border/titlebar chrome. `{0,0,0,0}` if never sized. You only need this directly if you're doing something `WM::internal::Draw()` doesn't already handle for you (e.g. custom drawing relative to a window without going through `WindowSetContent`). |
+| Function                            | Purpose                                                                                                                                                                                                                                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WindowCreate()`                    | Creates a window (title `"New Window"`, zero-sized, resizable) and returns its handle.                                                                                                                                                                                                                     |
+| `WindowSetTitle(handle, title)`     | Sets the titlebar text.                                                                                                                                                                                                                                                                                    |
+| `WindowSetPosition(handle, {x, y})` | Sets the window's outer top-left corner.                                                                                                                                                                                                                                                                   |
+| `WindowSetSize(handle, {w, h})`     | Sets the window's outer width/height. A window with zero size in both dimensions is skipped entirely by `Draw()` (`WindowManager.cpp:134-136`) — nothing is drawn until you size it.                                                                                                                       |
+| `WindowSetResizable(handle, bool)`  | Whether the border-drag resize interaction responds for this window (default `true`). `false` still allows moving via the titlebar.                                                                                                                                                                        |
+| `WindowDestroy(handle)`             | Removes the window (and its content tree, if any) from the registry.                                                                                                                                                                                                                                       |
+| `WindowSetContent(handle, content)` | Takes ownership of a `UI::Widget` tree as the window's content. Replaces any previously-set content. See the guide above.                                                                                                                                                                                  |
+| `WindowGetClientRect(handle)`       | Returns the window's _content_ rectangle — inside the border/titlebar chrome. `{0,0,0,0}` if never sized. You only need this directly if you're doing something `WM::internal::Draw()` doesn't already handle for you (e.g. custom drawing relative to a window without going through `WindowSetContent`). |
 
 ### Per-frame driving (`WM::internal`)
 
-| Function | Purpose |
-|---|---|
-| `Initialize()` | No-op today; call once at startup for forward compatibility. |
-| `ProcessEvents()` | For every window with content set: polls input against it (`Widget::ProcessEvents()`) and runs keyboard-focus cycling (`Widget::ProcessKeyboardFocus`) — once per window, matching the "once per tree per frame" contract each of those has. Call once per frame, before reading/mutating widget state. |
-| `Draw()` | For every window (skipping unsized ones): paints the border+shadow, titlebar (hover-highlighted), title text, and close button (not yet wired to `WindowDestroy`) — then, immediately after that window's own chrome, lays out (`Layout(WindowGetClientRect(handle))`) and draws its content, if any. Content is laid out fresh every frame (see below), so it always reflects the window's current position/size. Draw order is ascending handle (creation) order for both chrome and content, so overlapping windows' content stays correctly on top of / behind the right chrome. |
-| `Cleanup()` | No-op today; call once at shutdown for forward compatibility. |
+| Function          | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Initialize()`    | No-op today; call once at startup for forward compatibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `ProcessEvents()` | For every window with content set: polls input against it (`Widget::ProcessEvents()`) and runs keyboard-focus cycling (`Widget::ProcessKeyboardFocus`) — once per window, matching the "once per tree per frame" contract each of those has. Call once per frame, before reading/mutating widget state.                                                                                                                                                                                                                                                                              |
+| `Draw()`          | For every window (skipping unsized ones): paints the border+shadow, titlebar (hover-highlighted), title text, and close button (not yet wired to `WindowDestroy`) — then, immediately after that window's own chrome, lays out (`Layout(WindowGetClientRect(handle))`) and draws its content, if any. Content is laid out fresh every frame (see below), so it always reflects the window's current position/size. Draw order is ascending handle (creation) order for both chrome and content, so overlapping windows' content stays correctly on top of / behind the right chrome. |
+| `Cleanup()`       | No-op today; call once at shutdown for forward compatibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -132,17 +133,18 @@ call an explicit inset override.
 - **Thread-unsafe callers, thread-safe storage.** Every `WM::` function
   locks the same mutex around `_window_map`, so concurrent calls from
   different threads won't corrupt window state — but there's no
-  synchronization *between* `ProcessEvents()`/`Draw()` and the `UI::`
+  synchronization _between_ `ProcessEvents()`/`Draw()` and the `UI::`
   widget tree's own state (callbacks, `Ref()`'d pointers); this codebase
   is single-threaded end to end today, so this hasn't mattered in
   practice.
-- **No resize/move interaction.** `WindowSetPosition`/`WindowSetSize` only
-  change state when called explicitly from outside; nothing drags a
-  titlebar or resizes from an edge yet. Because `content->Layout()` is
-  called fresh every frame from the window's *current* `clientRect`
-  (`WindowManager.cpp:192-196`), content already tracks position/size
-  changes automatically whenever that interaction is added — no
-  invalidation callback is needed from `wm` for that to work.
+- **Move/resize via drag.** `ProcessEvents()` hit-tests the titlebar (move)
+  and a 6px band just outside each window's edges/corners (resize) against
+  the topmost window under the cursor, and mutates `clientRect` directly
+  while the mouse button is held — both snapped to a grid, with resize
+  additionally clamped to a `kMinWindowSize`. Because `content->Layout()`
+  is called fresh every frame from the window's _current_ `clientRect`,
+  content tracks position/size changes automatically — no invalidation
+  callback needed from `wm`.
 - **No z-order / click-to-front.** Overlapping windows always draw in
   creation order; clicking a background window doesn't raise it.
 - **The close button doesn't close anything yet** — it's painted but has

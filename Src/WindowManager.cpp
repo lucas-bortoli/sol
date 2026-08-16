@@ -4,12 +4,14 @@
 #include <raymath.h>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <string>
 
 #include "Assets.h"
+#include "Lib/UI/Input.h"
 #include "Lib/UI/Utils.h"
 #include "Palette.h"
 
@@ -26,6 +28,24 @@ struct Window {
 static WindowHandle _handle_counter = 0;
 static std::map<WindowHandle, Window> _window_map;
 static std::mutex _window_mutex;
+
+enum class DragMode {
+    None,
+    Move,
+    ResizeN,
+    ResizeS,
+    ResizeE,
+    ResizeW,
+    ResizeNE,
+    ResizeNW,
+    ResizeSE,
+    ResizeSW,
+};
+
+static WindowHandle _dragHandle = 0;
+static DragMode _dragMode = DragMode::None;
+static Vector2 _dragStartMouse{};
+static Rectangle _dragStartRect{};
 
 WindowHandle WindowCreate() {
     std::lock_guard<std::mutex> lock(_window_mutex);
@@ -98,6 +118,118 @@ Rectangle ComputeClientRect(const Window& window) {
         ),
     };
 }
+
+Rectangle ComputeTitlebarRect(const Window& window) {
+    return {
+        window.clientRect.x + 1,
+        window.clientRect.y + 1,
+        window.clientRect.width - 2,
+        18,
+    };
+}
+
+Rectangle ComputeCloseButtonRect(const Window& window) {
+    return {
+        window.clientRect.x + window.clientRect.width - 18 - 1,
+        window.clientRect.y + 1,
+        16,
+        14,
+    };
+}
+
+// Windows move and resize on a 4px grid, so their edges always line up
+// cleanly with each other regardless of drag start position.
+constexpr float kGridSize = 8.0f;
+constexpr float kMinWindowSize = 40.0f;
+// The resize hit region is a band entirely outside `clientRect`, so it
+// never overlaps the visible window/border or its content.
+constexpr float kResizeBorder = 8.0f;
+
+float SnapToGrid(float value) {
+    return std::round(value / kGridSize) * kGridSize;
+}
+
+bool IsInTitlebar(const Window& window, Vector2 mouse) {
+    if (!CheckCollisionPointRec(mouse, ComputeTitlebarRect(window))) {
+        return false;
+    }
+    return !CheckCollisionPointRec(mouse, ComputeCloseButtonRect(window));
+}
+
+DragMode HitTestResizeBorder(const Window& window, Vector2 mouse) {
+    if (!window.resizable) return DragMode::None;
+
+    Rectangle outer = window.clientRect;
+    Rectangle expanded = {
+        outer.x - kResizeBorder,
+        outer.y - kResizeBorder,
+        outer.width + 2 * kResizeBorder,
+        outer.height + 2 * kResizeBorder,
+    };
+    if (!CheckCollisionPointRec(mouse, expanded)) return DragMode::None;
+    if (CheckCollisionPointRec(mouse, outer)) return DragMode::None;
+
+    bool west = mouse.x < outer.x;
+    bool east = mouse.x > outer.x + outer.width;
+    bool north = mouse.y < outer.y;
+    bool south = mouse.y > outer.y + outer.height;
+
+    if (north && west) return DragMode::ResizeNW;
+    if (north && east) return DragMode::ResizeNE;
+    if (south && west) return DragMode::ResizeSW;
+    if (south && east) return DragMode::ResizeSE;
+    if (north) return DragMode::ResizeN;
+    if (south) return DragMode::ResizeS;
+    if (west) return DragMode::ResizeW;
+    if (east) return DragMode::ResizeE;
+    return DragMode::None;
+}
+
+/// Applies `_dragMode`'s effect for a mouse-delta of `delta` from
+/// `_dragStartRect`, snapping every resulting edge to the grid and
+/// clamping so width/height never drop below kMinWindowSize.
+Rectangle ApplyDrag(DragMode mode, const Rectangle& start, Vector2 delta) {
+    Rectangle result = start;
+
+    if (mode == DragMode::Move) {
+        result.x = SnapToGrid(start.x + delta.x);
+        result.y = SnapToGrid(start.y + delta.y);
+        return result;
+    }
+
+    bool west = mode == DragMode::ResizeW || mode == DragMode::ResizeNW ||
+                mode == DragMode::ResizeSW;
+    bool east = mode == DragMode::ResizeE || mode == DragMode::ResizeNE ||
+                mode == DragMode::ResizeSE;
+    bool north = mode == DragMode::ResizeN || mode == DragMode::ResizeNW ||
+                 mode == DragMode::ResizeNE;
+    bool south = mode == DragMode::ResizeS || mode == DragMode::ResizeSW ||
+                 mode == DragMode::ResizeSE;
+
+    if (west) {
+        float newLeft = SnapToGrid(start.x + delta.x);
+        newLeft = std::min(newLeft, start.x + start.width - kMinWindowSize);
+        result.width = (start.x + start.width) - newLeft;
+        result.x = newLeft;
+    } else if (east) {
+        float newRight = SnapToGrid(start.x + start.width + delta.x);
+        newRight = std::max(newRight, start.x + kMinWindowSize);
+        result.width = newRight - start.x;
+    }
+
+    if (north) {
+        float newTop = SnapToGrid(start.y + delta.y);
+        newTop = std::min(newTop, start.y + start.height - kMinWindowSize);
+        result.height = (start.y + start.height) - newTop;
+        result.y = newTop;
+    } else if (south) {
+        float newBottom = SnapToGrid(start.y + start.height + delta.y);
+        newBottom = std::max(newBottom, start.y + kMinWindowSize);
+        result.height = newBottom - start.y;
+    }
+
+    return result;
+}
 }  // namespace
 
 Rectangle WindowGetClientRect(WindowHandle handle) {
@@ -118,6 +250,39 @@ void Initialize() {}
 
 void ProcessEvents() {
     std::lock_guard<std::mutex> lock(_window_mutex);
+
+    UI::InputSource& input = UI::CurrentInput();
+    Vector2 mouse = input.GetMousePosition();
+
+    if (_dragMode == DragMode::None &&
+        input.IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+        for (auto it = _window_map.rbegin(); it != _window_map.rend(); ++it) {
+            Window& window = it->second;
+            DragMode mode = HitTestResizeBorder(window, mouse);
+            if (mode == DragMode::None && IsInTitlebar(window, mouse)) {
+                mode = DragMode::Move;
+            }
+            if (mode != DragMode::None) {
+                _dragHandle = window.handle;
+                _dragMode = mode;
+                _dragStartMouse = mouse;
+                _dragStartRect = window.clientRect;
+                break;
+            }
+        }
+    } else if (_dragMode != DragMode::None) {
+        if (input.IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
+            Vector2 delta = {
+                mouse.x - _dragStartMouse.x, mouse.y - _dragStartMouse.y
+            };
+            _window_map.at(_dragHandle).clientRect =
+                ApplyDrag(_dragMode, _dragStartRect, delta);
+        }
+        if (input.IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
+            _dragMode = DragMode::None;
+        }
+    }
+
     for (const auto& [handle, window] : _window_map) {
         if (!window.content) continue;
         window.content->ProcessEvents();
@@ -128,8 +293,6 @@ void ProcessEvents() {
 void Draw() {
     std::lock_guard<std::mutex> lock(_window_mutex);
 
-    auto mousePos = GetMousePosition();
-
     for (const auto& [handle, window] : _window_map) {
         if (window.clientRect.width == 0 && window.clientRect.height == 0) {
             continue;
@@ -139,13 +302,7 @@ void Draw() {
             window.clientRect, WHITE, NEUTRAL_600, 2
         );
 
-        // titlebar
-        Rectangle titlebar = {
-            window.clientRect.x + 1,
-            window.clientRect.y + 1,
-            window.clientRect.width - 2,
-            18
-        };
+        Rectangle titlebar = ComputeTitlebarRect(window);
 
         DrawRectangleGradientH(
             titlebar.x,
@@ -164,12 +321,7 @@ void Draw() {
             NEUTRAL_500
         );
 
-        Rectangle closeButtonRect = {
-            window.clientRect.x + window.clientRect.width - 18 - 1,
-            window.clientRect.y + 1,
-            16,
-            14
-        };
+        Rectangle closeButtonRect = ComputeCloseButtonRect(window);
 
         // titlebar X
         DrawRectangle(

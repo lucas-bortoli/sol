@@ -435,7 +435,7 @@ void TextBox::Draw() const {
             static_cast<int>(innerRect.y),
             static_cast<int>(selEndX - selStartX),
             static_cast<int>(innerRect.height),
-            BLUE_200
+            SKY_200
         );
     }
 

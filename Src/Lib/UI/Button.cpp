@@ -43,7 +43,7 @@ void Button::Draw() const {
         drawnRect.x += 1;
         drawnRect.y += 1;
 
-        UI::DrawRectWithBorderAndShadow(drawnRect, WHITE, NEUTRAL_600, 0);
+        UI::DrawRectWithBorderAndShadow(drawnRect, ZINC_100, NEUTRAL_600, 0);
         UI::DrawTextWithShadow(
             text.c_str(),
             drawnRect.x + kPaddingX,
@@ -51,7 +51,7 @@ void Button::Draw() const {
             NEUTRAL_600
         );
     } else {
-        UI::DrawRectWithBorderAndShadow(drawnRect, WHITE, NEUTRAL_600, 1);
+        UI::DrawRectWithBorderAndShadow(drawnRect, ZINC_100, NEUTRAL_600, 1);
         UI::DrawTextWithShadow(
             text.c_str(),
             drawnRect.x + kPaddingX,
