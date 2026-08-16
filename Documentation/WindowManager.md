@@ -13,13 +13,17 @@ how the two are wired together.
   (`WindowManager.cpp:16-28`).
 - **A de facto global singleton.** All window state lives in file-scope
   `static`s in `WindowManager.cpp`; `WM::internal::Initialize()`/
-  `Cleanup()` are currently no-ops (`WindowManager.cpp:117,200`) — nothing
+  `Cleanup()` are currently no-ops (`WindowManager.cpp:305,391`) — nothing
   about window state is tied to their lifetime.
-- **No z-order, but windows are draggable and resizable.** Windows draw
-  in ascending-handle (creation) order — there's no click-to-front or
-  raise-on-focus. Dragging the titlebar moves a window; dragging the
-  invisible border region just outside a window's edges/corners resizes it. Both move
-  and resize snap position/size to a grid.
+- **Z-order via `UI::LayerStacker`, plus drag/resize.** Every window
+  registers one item in `UI::Layer::Windows` on `UI::GlobalLayerStacker()`
+  (see [`Documentation/LayerStacker.md`](LayerStacker.md)); a fresh click
+  raises whatever window it lands on to the front, and that same registry
+  decides paint order (`internal::Draw()` is just `DrawAll()`) and which
+  window's content sees the pointer this frame. Dragging the titlebar
+  moves a window; dragging the invisible border region just outside a
+  window's edges/corners resizes it. Both move and resize snap
+  position/size to a grid.
 
 ---
 
@@ -100,21 +104,21 @@ alongside `WM::internal::Cleanup()`) — this also drops the window's
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `Initialize()`    | No-op today; call once at startup for forward compatibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | `ProcessEvents()` | For every window with content set: polls input against it (`Widget::ProcessEvents()`) and runs keyboard-focus cycling (`Widget::ProcessKeyboardFocus`) — once per window, matching the "once per tree per frame" contract each of those has. Call once per frame, before reading/mutating widget state.                                                                                                                                                                                                                                                                              |
-| `Draw()`          | For every window (skipping unsized ones): paints the border+shadow, titlebar (hover-highlighted), title text, and close button (not yet wired to `WindowDestroy`) — then, immediately after that window's own chrome, lays out (`Layout(WindowGetClientRect(handle))`) and draws its content, if any. Content is laid out fresh every frame (see below), so it always reflects the window's current position/size. Draw order is ascending handle (creation) order for both chrome and content, so overlapping windows' content stays correctly on top of / behind the right chrome. |
+| `Draw()`          | `UI::GlobalLayerStacker().DrawAll()` — for every window, back-to-front by current z-order (skipping unsized ones): paints the border+shadow, titlebar (hover-highlighted), title text, and close button (not yet wired to `WindowDestroy`), then, immediately after, lays out (`Layout(WindowGetClientRect(handle))`) and draws its content, if any. Content is laid out fresh every frame (see below), so it always reflects the window's current position/size. Chrome and content for a window share one `LayerStacker::Drawable`, so overlapping windows' content always stays correctly on top of / behind the right chrome. |
 | `Cleanup()`       | No-op today; call once at shutdown for forward compatibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
 ## The content rectangle
 
-`Draw()` paints, per window (`WindowManager.cpp:138-190`): a bordered,
+`Window::Draw()` paints, per window (`WindowManager.cpp:255`): a bordered,
 drop-shadowed rectangle at the window's full outer bounds; a titlebar
 strip 1px inset from the top/sides, 16px tall; the title text near its
 top-left; and a close-button box at its top-right. The **content
 rectangle** — where `Layout()` places a window's `content` tree — insets
 the window's outer bounds by a fixed amount on each side, computed by an
-internal `ComputeClientRect()` helper (`WindowManager.cpp:79-100`) shared
-by both `Draw()`'s own content-layout call and the public
+internal `ComputeClientRect()` helper (`WindowManager.cpp:119`) shared by
+both `Window::Draw()`'s own content-layout call and the public
 `WindowGetClientRect()`. The exact inset values are named constants right
 next to that function — check there for the current numbers rather than
 relying on this doc, since they're a purely cosmetic tuning knob that may
@@ -137,16 +141,24 @@ call an explicit inset override.
   widget tree's own state (callbacks, `Ref()`'d pointers); this codebase
   is single-threaded end to end today, so this hasn't mattered in
   practice.
-- **Move/resize via drag.** `ProcessEvents()` hit-tests the titlebar (move)
-  and a 6px band just outside each window's edges/corners (resize) against
-  the topmost window under the cursor, and mutates `clientRect` directly
-  while the mouse button is held — both snapped to a grid, with resize
-  additionally clamped to a `kMinWindowSize`. Because `content->Layout()`
-  is called fresh every frame from the window's _current_ `clientRect`,
-  content tracks position/size changes automatically — no invalidation
-  callback needed from `wm`.
-- **No z-order / click-to-front.** Overlapping windows always draw in
-  creation order; clicking a background window doesn't raise it.
+- **Move/resize via drag, occlusion-aware.** On a fresh press,
+  `ProcessEvents()` walks windows in current front-to-back z-order
+  (`LayerStacker::ItemsFrontToBack(Layer::Windows)`), testing each one's
+  titlebar (move) and its resize band (a fixed distance outside its
+  edges/corners) in turn; the first window whose band matches wins, and
+  that same walk also decides which window a plain click raises to front,
+  so the two questions can never disagree. Critically, the walk stops as
+  soon as it reaches a window whose plain `clientRect` (not just its
+  band) contains the cursor, even without a border/titlebar match — that
+  window's visible body occludes everything behind it there, so a window
+  further back can't have its border grabbed *through* a window drawn on
+  top of it, and the topmost window's own resize band still works even
+  where it happens to overlap a window behind it. `clientRect` mutates
+  directly while the mouse button is held, both move and resize snapped
+  to a grid, resize additionally clamped to a `kMinWindowSize`. Because
+  `content->Layout()` is called fresh every frame from the window's
+  _current_ `clientRect`, content tracks position/size changes
+  automatically — no invalidation callback needed from `wm`.
 - **The close button doesn't close anything yet** — it's painted but has
   no click handler wired to `WindowDestroy`.
 

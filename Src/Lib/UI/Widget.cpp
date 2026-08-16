@@ -10,7 +10,14 @@ namespace UI {
 
 namespace {
 Widget* g_focusedWidget = nullptr;
+bool g_pointerEventsSuppressed = false;
 }  // namespace
+
+namespace internal {
+void SetPointerEventsSuppressed(bool suppressed) {
+    g_pointerEventsSuppressed = suppressed;
+}
+}  // namespace internal
 
 bool IsKeyRepeated(int key, float& heldSeconds, float delay, float interval) {
     if (CurrentInput().IsKeyPressed(key)) {
@@ -35,11 +42,18 @@ bool IsKeyRepeated(int key, float& heldSeconds, float delay, float interval) {
 Widget::~Widget() {
     *aliveToken = false;
     if (g_focusedWidget == this) g_focusedWidget = nullptr;
+    if (layerToken) GlobalLayerStacker().Unregister(*layerToken);
 }
 
 void Widget::Layout(const Rectangle& bounds) {
     computedRect = bounds;
     layoutDirty = false;
+    if (layerToken) GlobalLayerStacker().SetBounds(*layerToken, computedRect);
+}
+
+void Widget::RegisterLayer(Layer layer) {
+    if (layerToken) return;
+    layerToken = GlobalLayerStacker().Register(layer, *this);
 }
 
 void Widget::ProcessEvents() { PollPointerEvents(computedRect); }
@@ -122,7 +136,11 @@ void Widget::ReleaseAllKeys() {
 
 void Widget::PollPointerEvents(const Rectangle& rect) {
     Vector2 mouse = CurrentInput().GetMousePosition();
-    bool hovered = CheckCollisionPointRec(mouse, rect);
+    bool hovered =
+        !g_pointerEventsSuppressed && CheckCollisionPointRec(mouse, rect);
+    if (hovered && layerToken) {
+        hovered = GlobalLayerStacker().IsTopmostAt(*layerToken, mouse);
+    }
     bool hoverChanged = hovered != wasHovered;
     wasHovered = hovered;
 

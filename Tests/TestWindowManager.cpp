@@ -6,6 +6,7 @@
 #include <doctest.h>
 
 #include "FakeInput.h"
+#include "../Src/Lib/UI/UI.h"
 #include "../Src/WindowManager.h"
 
 namespace {
@@ -195,4 +196,157 @@ TEST_CASE("WM: releasing the mouse ends the drag") {
     CHECK(afterRelease.y == afterExtraMove.y);
     CHECK(afterRelease.width == afterExtraMove.width);
     CHECK(afterRelease.height == afterExtraMove.height);
+}
+
+TEST_CASE("WM: a click in the overlap between two windows only fires the "
+          "topmost window's button") {
+    FakeInput fake;
+    ScopedInput scoped(fake);
+    ScopedWindow windowA;
+    ScopedWindow windowB;
+
+    WM::WindowSetPosition(windowA.handle, {0, 0});
+    WM::WindowSetSize(windowA.handle, {200, 200});
+    WM::WindowSetPosition(windowB.handle, {100, 100});
+    WM::WindowSetSize(windowB.handle, {200, 200});
+
+    int clicksA = 0;
+    int clicksB = 0;
+    UI::Button* buttonA = nullptr;
+    UI::Button* buttonB = nullptr;
+    WM::WindowSetContent(
+        windowA.handle,
+        UI::Btn("A").Ref(buttonA).OnActivate([&clicksA] { clicksA++; })
+    );
+    WM::WindowSetContent(
+        windowB.handle,
+        UI::Btn("B").Ref(buttonB).OnActivate([&clicksB] { clicksB++; })
+    );
+
+    // ProcessEvents() hit-tests against the *previous* frame's Layout() —
+    // normally run from Draw(), which also issues real raylib draw calls
+    // this headless test can't make. Lay out both windows' content
+    // directly instead (Widget::Layout() itself touches no raylib state).
+    buttonA->Layout(WM::WindowGetClientRect(windowA.handle));
+    buttonB->Layout(WM::WindowGetClientRect(windowB.handle));
+
+    // windowB was created (and therefore registered) after windowA, so it
+    // starts frontmost in the overlapping region — {150, 150} is inside
+    // both windows' client rects.
+    fake.MoveMouseTo({150, 150});
+    fake.PressMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    fake.NextFrame();
+    fake.ReleaseMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    CHECK(clicksA == 0);
+    CHECK(clicksB == 1);
+
+    // A click inside windowA's own titlebar brings it to front...
+    fake.NextFrame();
+    fake.MoveMouseTo({10, 5});
+    fake.PressMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    fake.NextFrame();
+    fake.ReleaseMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    // ...so a second click in the overlap now reaches windowA instead.
+    fake.NextFrame();
+    fake.MoveMouseTo({150, 150});
+    fake.PressMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    fake.NextFrame();
+    fake.ReleaseMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    CHECK(clicksA == 1);
+    CHECK(clicksB == 1);
+}
+
+TEST_CASE("WM: a window's resize border can't be grabbed through another "
+          "window drawn on top of it") {
+    FakeInput fake;
+    ScopedInput scoped(fake);
+    ScopedWindow windowA;
+    ScopedWindow windowB;
+
+    WM::WindowSetPosition(windowA.handle, {100, 100});
+    WM::WindowSetSize(windowA.handle, {200, 150});
+
+    // windowB is registered after windowA, so it starts frontmost, and
+    // sits directly on top of windowA's bottom-right resize band (just
+    // outside windowA's own clientRect, at {292..308, 242..258}).
+    WM::WindowSetPosition(windowB.handle, {250, 200});
+    WM::WindowSetSize(windowB.handle, {100, 100});
+
+    Rectangle before = WM::WindowGetClientRect(windowA.handle);
+
+    // Same point the "dragging a corner resizes" test above uses to grab
+    // windowA's resize band — but now it's covered by windowB.
+    fake.MoveMouseTo({303, 253});
+    fake.PressMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    fake.NextFrame();
+    fake.MoveMouseTo({312, 256});
+    WM::internal::ProcessEvents();
+
+    fake.NextFrame();
+    fake.ReleaseMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    Rectangle after = WM::WindowGetClientRect(windowA.handle);
+    CHECK(after.x == before.x);
+    CHECK(after.y == before.y);
+    CHECK(after.width == before.width);
+    CHECK(after.height == before.height);
+}
+
+TEST_CASE("WM: the topmost window's own resize border still works even "
+          "where it overlaps a window behind it") {
+    FakeInput fake;
+    ScopedInput scoped(fake);
+    // windowB first, so windowA (created second) starts frontmost —
+    // mirrors the previous test's geometry with the stacking flipped:
+    // now it's windowA on top, and windowA's own bottom-right resize band
+    // is the thing overlapping windowB's clientRect.
+    ScopedWindow windowB;
+    ScopedWindow windowA;
+
+    WM::WindowSetPosition(windowA.handle, {100, 100});
+    WM::WindowSetSize(windowA.handle, {200, 150});
+    WM::WindowSetPosition(windowB.handle, {250, 200});
+    WM::WindowSetSize(windowB.handle, {100, 100});
+
+    Rectangle beforeA = WM::WindowGetClientRect(windowA.handle);
+    Rectangle beforeB = WM::WindowGetClientRect(windowB.handle);
+
+    // windowA's own corner band, same point as the two tests above.
+    fake.MoveMouseTo({303, 253});
+    fake.PressMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    fake.NextFrame();
+    fake.MoveMouseTo({312, 256});
+    WM::internal::ProcessEvents();
+
+    fake.NextFrame();
+    fake.ReleaseMouseButton(MOUSE_BUTTON_LEFT);
+    WM::internal::ProcessEvents();
+
+    Rectangle afterA = WM::WindowGetClientRect(windowA.handle);
+    CHECK(afterA.width == doctest::Approx(beforeA.width + 12));
+    CHECK(afterA.height == doctest::Approx(beforeA.height + 6));
+
+    // windowB, sitting behind, is untouched.
+    Rectangle afterB = WM::WindowGetClientRect(windowB.handle);
+    CHECK(afterB.x == beforeB.x);
+    CHECK(afterB.y == beforeB.y);
+    CHECK(afterB.width == beforeB.width);
+    CHECK(afterB.height == beforeB.height);
 }

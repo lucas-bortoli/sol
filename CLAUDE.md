@@ -37,6 +37,14 @@ Two subsystems, connected but independently understandable:
   `Layout`/`Draw` every frame — callers never touch a window's widget
   tree directly after handing it over. Full guide: `Documentation/WindowManager.md`.
 
+- **`UI::LayerStacker`** (`Src/Lib/UI/LayerStacker.h`/`.cpp`) is a global
+  z-order + click-ownership registry for anything that floats independent
+  of normal tree containment — today, one item per `WM::` window. Fixed
+  back-to-front `UI::Layer` bands (`Background`/`Windows`/`Shell`/`Menu`/
+  `Notification`) each hold their own reorderable stack; `TopmostAt()`
+  decides which item a click is actually directed at, `DrawAll()` decides
+  paint order. Full guide: `Documentation/LayerStacker.md`.
+
 - All raylib reads of live input state (mouse, keyboard, clipboard,
   clock) go through `UI::CurrentInput()` (`Src/Lib/UI/Input.h`/`.cpp`)
   rather than calling raylib directly. This is the seam the test suite

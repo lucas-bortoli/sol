@@ -13,6 +13,12 @@ themselves — this document only covers what's drawn *inside* one).
   `Src/Lib/UI/Widget.h:13-15`.
 - **C++20**, one `.h`/`.cpp` pair per widget, everything in `namespace UI`.
   Include `lib/ui/UI.h` to pull in the whole toolkit.
+- **Z-order for things that float independent of the tree** (a window's
+  content root today; a future popup menu or toast) goes through
+  `UI::LayerStacker`, a separate global registry — see
+  [`Documentation/LayerStacker.md`](LayerStacker.md). Ordinary widgets
+  never touch it; they hit-test locally against their own `computedRect`
+  exactly as described below.
 
 ---
 

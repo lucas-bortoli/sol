@@ -7,14 +7,25 @@
 #include <optional>
 #include <vector>
 
+#include "LayerStacker.h"
+
 namespace UI {
 
 class Container;
 
+namespace internal {
+/// Suppresses pointer input (hover/press/click/activate) for every widget
+/// polled while suppressed — set by WM around an occluded window's whole
+/// content tree for the duration of its ProcessEvents() call, so a click
+/// in the overlap between two windows can't reach the one that isn't on
+/// top. Does not affect keyboard focus/activation.
+void SetPointerEventsSuppressed(bool suppressed);
+}  // namespace internal
+
 /// Base of every UI element. Owns nothing about its children; layout and
 /// painting are two separate passes so the flexbox math can be reasoned
 /// about (and tested) without touching raylib.
-class Widget {
+class Widget : public LayerStacker::Drawable {
    public:
     /// Clears the global focus pointer if this widget currently holds it,
     /// so a destroyed widget can never be read back as focused.
@@ -223,6 +234,19 @@ class Widget {
     /// onHoverChange as needed, and updates pointerDown. Called from
     /// ProcessEvents() by widgets that support input.
     void PollPointerEvents(const Rectangle& rect);
+
+    /// Opts this widget into GlobalLayerStacker() as `layer`'s newest
+    /// item — for widgets that can visually float independent of normal
+    /// parent-child containment (a window's content root, a future popup
+    /// menu), not for ordinary flow children. Once registered, hovering
+    /// additionally requires this widget to be the topmost registered item
+    /// under the pointer, so overlapping unrelated widget trees can't both
+    /// react to the same click. No-op if already registered.
+    void RegisterLayer(Layer layer);
+
+    /// This widget's GlobalLayerStacker() token, if RegisterLayer() has
+    /// been called.
+    std::optional<LayerStacker::ItemId> layerToken;
 
    private:
     /// Fires onKeyUp for every still-held key and clears heldKeys. Called

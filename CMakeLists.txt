@@ -22,6 +22,7 @@ add_executable(sol
     Src/Lib/UI/Utils.cpp
     Src/Lib/UI/Input.cpp
     Src/Lib/UI/Widget.cpp
+    Src/Lib/UI/LayerStacker.cpp
     Src/Lib/UI/Container.cpp
     Src/Lib/UI/Label.cpp
     Src/Lib/UI/Spacer.cpp
@@ -41,6 +42,7 @@ add_executable(sol_tests
     Tests/TestContainer.cpp
     Tests/TestInputDriven.cpp
     Tests/TestWindowManager.cpp
+    Tests/TestLayerStacker.cpp
     Src/Lib/FontParser/Bdf.cpp
     Src/WindowManager.cpp
     Src/Shell.cpp
@@ -48,6 +50,7 @@ add_executable(sol_tests
     Src/Lib/UI/Utils.cpp
     Src/Lib/UI/Input.cpp
     Src/Lib/UI/Widget.cpp
+    Src/Lib/UI/LayerStacker.cpp
     Src/Lib/UI/Container.cpp
     Src/Lib/UI/Label.cpp
     Src/Lib/UI/Spacer.cpp

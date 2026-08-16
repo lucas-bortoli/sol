@@ -12,17 +12,27 @@
 
 #include "Assets.h"
 #include "Lib/UI/Input.h"
+#include "Lib/UI/LayerStacker.h"
 #include "Lib/UI/Utils.h"
 #include "Palette.h"
 
 namespace WM {
 
-struct Window {
+struct Window : UI::LayerStacker::Drawable {
     const WindowHandle handle;
-    std::string title;
-    Rectangle clientRect;
-    bool resizable;
+    std::string title = "New Window";
+    Rectangle clientRect{0, 0, 0, 0};
+    bool resizable = true;
     std::unique_ptr<UI::Widget> content;
+    UI::LayerStacker::ItemId layerToken = 0;
+
+    explicit Window(WindowHandle handle) : handle(handle) {}
+
+    /// Paints this window's chrome (border/titlebar/close button) then, if
+    /// content has been set, lays out and paints it — the single delegate
+    /// GlobalLayerStacker().DrawAll() invokes for this window, keeping
+    /// chrome and content glued together in paint order.
+    void Draw() const override;
 };
 
 static WindowHandle _handle_counter = 0;
@@ -51,15 +61,9 @@ WindowHandle WindowCreate() {
     std::lock_guard<std::mutex> lock(_window_mutex);
 
     WindowHandle handle = _handle_counter++;
-    Window window = {
-        .handle = handle,
-        .title = "New Window",
-        .clientRect = {0, 0, 0, 0},
-        .resizable = true,
-        .content = nullptr,
-    };
-
-    _window_map.emplace(handle, std::move(window));
+    auto [it, inserted] = _window_map.try_emplace(handle, handle);
+    Window& window = it->second;
+    window.layerToken = UI::GlobalLayerStacker().Register(UI::Layer::Windows, window);
 
     return handle;
 }
@@ -92,8 +96,24 @@ void WindowSetResizable(WindowHandle handle, const bool resizable) {
 
 void WindowDestroy(WindowHandle handle) {
     std::lock_guard<std::mutex> lock(_window_mutex);
-    _window_map.erase(handle);
+    auto it = _window_map.find(handle);
+    if (it == _window_map.end()) return;
+    UI::GlobalLayerStacker().Unregister(it->second.layerToken);
+    _window_map.erase(it);
 }
+
+namespace {
+/// The Windows-layer registration is per-Window, not per-WindowHandle
+/// index, so a LayerStacker::ItemId (e.g. from TopmostAt()) is mapped back
+/// to its Window with a linear scan — fine given how few windows exist at
+/// once.
+Window* FindByLayerToken(UI::LayerStacker::ItemId token) {
+    for (auto& [handle, window] : _window_map) {
+        if (window.layerToken == token) return &window;
+    }
+    return nullptr;
+}
+}  // namespace
 
 namespace {
 Rectangle ComputeClientRect(const Window& window) {
@@ -232,6 +252,42 @@ Rectangle ApplyDrag(DragMode mode, const Rectangle& start, Vector2 delta) {
 }
 }  // namespace
 
+void Window::Draw() const {
+    if (clientRect.width == 0 && clientRect.height == 0) return;
+
+    UI::DrawRectWithBorderAndShadow(clientRect, WHITE, NEUTRAL_600, 2);
+
+    Rectangle titlebar = ComputeTitlebarRect(*this);
+
+    DrawRectangleGradientH(
+        titlebar.x, titlebar.y, titlebar.width, titlebar.height, ORANGE_600,
+        ORANGE_800
+    );
+
+    UI::DrawTextWithShadow(
+        title.c_str(), clientRect.x + 4, clientRect.y + 4, NEUTRAL_200,
+        NEUTRAL_500
+    );
+
+    Rectangle closeButtonRect = ComputeCloseButtonRect(*this);
+
+    // titlebar X
+    DrawRectangle(
+        closeButtonRect.x, closeButtonRect.y, closeButtonRect.width,
+        closeButtonRect.height, RED
+    );
+    DrawTexture(
+        Assets::WindowCloseButtonX, closeButtonRect.x + 5,
+        closeButtonRect.y + 4, WHITE
+    );
+
+    if (content) {
+        Rectangle innerRect = ComputeClientRect(*this);
+        content->Layout(innerRect);
+        content->Draw();
+    }
+}
+
 Rectangle WindowGetClientRect(WindowHandle handle) {
     std::lock_guard<std::mutex> lock(_window_mutex);
     return ComputeClientRect(_window_map.at(handle));
@@ -254,20 +310,53 @@ void ProcessEvents() {
     UI::InputSource& input = UI::CurrentInput();
     Vector2 mouse = input.GetMousePosition();
 
+    for (auto& [handle, window] : _window_map) {
+        UI::GlobalLayerStacker().SetBounds(window.layerToken, window.clientRect);
+    }
+
     if (_dragMode == DragMode::None &&
         input.IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-        for (auto it = _window_map.rbegin(); it != _window_map.rend(); ++it) {
-            Window& window = it->second;
-            DragMode mode = HitTestResizeBorder(window, mouse);
-            if (mode == DragMode::None && IsInTitlebar(window, mouse)) {
+        // Single front-to-back walk decides both "who does this click
+        // raise to front" and "does it start a drag" — using the same
+        // per-window test (border/titlebar first, falling back to plain
+        // clientRect occlusion) so the two questions can never disagree.
+        // A pure LayerStacker::TopmostAt(mouse) lookup isn't enough here:
+        // it only knows about each window's clientRect, not the resize
+        // border that pokes out past it, so a click on the topmost
+        // window's own corner could otherwise resolve to a different,
+        // merely-underneath window instead.
+        Window* hitWindow = nullptr;
+        DragMode hitMode = DragMode::None;
+        for (UI::LayerStacker::ItemId token :
+             UI::GlobalLayerStacker().ItemsFrontToBack(UI::Layer::Windows)) {
+            Window* window = FindByLayerToken(token);
+            if (!window) continue;
+            DragMode mode = HitTestResizeBorder(*window, mouse);
+            if (mode == DragMode::None && IsInTitlebar(*window, mouse)) {
                 mode = DragMode::Move;
             }
             if (mode != DragMode::None) {
-                _dragHandle = window.handle;
-                _dragMode = mode;
-                _dragStartMouse = mouse;
-                _dragStartRect = window.clientRect;
+                hitWindow = window;
+                hitMode = mode;
                 break;
+            }
+            // No border/titlebar match, but the pointer is over this
+            // window's visible body — it occludes every window behind it
+            // here, so the click belongs to it (with no drag) rather than
+            // falling through to a window further back.
+            if (CheckCollisionPointRec(mouse, window->clientRect)) {
+                hitWindow = window;
+                break;
+            }
+        }
+
+        if (hitWindow) {
+            UI::GlobalLayerStacker().BringToFront(hitWindow->layerToken);
+            if (hitMode != DragMode::None) {
+                _dragHandle = hitWindow->handle;
+                _dragMode = hitMode;
+                _dragStartMouse = mouse;
+                _dragStartRect = hitWindow->clientRect;
             }
         }
     } else if (_dragMode != DragMode::None) {
@@ -285,65 +374,18 @@ void ProcessEvents() {
 
     for (const auto& [handle, window] : _window_map) {
         if (!window.content) continue;
+        bool topmost =
+            UI::GlobalLayerStacker().IsTopmostAt(window.layerToken, mouse);
+        UI::internal::SetPointerEventsSuppressed(!topmost);
         window.content->ProcessEvents();
         UI::Widget::ProcessKeyboardFocus(*window.content);
     }
+    UI::internal::SetPointerEventsSuppressed(false);
 }
 
 void Draw() {
     std::lock_guard<std::mutex> lock(_window_mutex);
-
-    for (const auto& [handle, window] : _window_map) {
-        if (window.clientRect.width == 0 && window.clientRect.height == 0) {
-            continue;
-        }
-
-        UI::DrawRectWithBorderAndShadow(
-            window.clientRect, WHITE, NEUTRAL_600, 2
-        );
-
-        Rectangle titlebar = ComputeTitlebarRect(window);
-
-        DrawRectangleGradientH(
-            titlebar.x,
-            titlebar.y,
-            titlebar.width,
-            titlebar.height,
-            ORANGE_600,
-            ORANGE_800
-        );
-
-        UI::DrawTextWithShadow(
-            window.title.c_str(),
-            window.clientRect.x + 4,
-            window.clientRect.y + 4,
-            NEUTRAL_200,
-            NEUTRAL_500
-        );
-
-        Rectangle closeButtonRect = ComputeCloseButtonRect(window);
-
-        // titlebar X
-        DrawRectangle(
-            closeButtonRect.x,
-            closeButtonRect.y,
-            closeButtonRect.width,
-            closeButtonRect.height,
-            RED
-        );
-        DrawTexture(
-            Assets::WindowCloseButtonX,
-            closeButtonRect.x + 5,
-            closeButtonRect.y + 4,
-            WHITE
-        );
-
-        if (window.content) {
-            Rectangle clientRect = ComputeClientRect(window);
-            window.content->Layout(clientRect);
-            window.content->Draw();
-        }
-    }
+    UI::GlobalLayerStacker().DrawAll();
 }
 
 void Cleanup() {}
